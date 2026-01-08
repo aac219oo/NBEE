@@ -1,8 +1,8 @@
 [submodule "apps/cms"]
 	path = apps/cms
 	url = https://github.com/Heiso-admin/nbee-cms.git
-	branch = chore/setup-monorepo-structure
+	branch = refactor/cms-deduplication
 [submodule "packages/core"]
 	path = packages/core
-	url = https://github.com/Heiso-admin/Core-BEE.git
-	branch = chore/setup-monorepo-structure
+	url = https://github.com/aac219oo/Core-BEE.git
+	branch = refactor/core-deduplication
