@@ -3,6 +3,8 @@
     "globalEnv": [
         "DATABASE_URL",
         "AUTH_SECRET",
+        "RESEND_API_KEY",
+        "HIVE_DATABASE_URL",
         "NEXT_PUBLIC_*"
     ],
     "tasks": {
