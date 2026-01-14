@@ -5,7 +5,7 @@
 [submodule "packages/core"]
 	path = packages/core
 	url = https://github.com/Heiso-admin/Core-BEE.git
-	branch = main
+	branch = demo/none_2fa
 [submodule "packages/hive"]
 	path = packages/hive
 	url = https://github.com/Heiso-admin/Hive.git
