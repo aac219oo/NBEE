@@ -5,6 +5,7 @@
         "AUTH_SECRET",
         "RESEND_API_KEY",
         "HIVE_DATABASE_URL",
+        "NOTIFY_EMAIL",
         "NEXT_PUBLIC_*"
     ],
     "tasks": {
