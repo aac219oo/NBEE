@@ -2,10 +2,6 @@
 	path = apps/cms
 	url = https://github.com/Heiso-admin/nbee-cms.git
 	branch = main
-[submodule "packages/core"]
-	path = packages/core
-	url = https://github.com/Heiso-admin/Core-BEE.git
-	branch = main
 [submodule "packages/hive"]
 	path = packages/hive
 	url = https://github.com/Heiso-admin/Hive.git

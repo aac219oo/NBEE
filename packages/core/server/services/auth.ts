@@ -1,0 +1,178 @@
+"use server";
+
+import { type Transaction } from "@heiso/core/lib/db";
+import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
+import { ensureTenantContext } from "@heiso/core/lib/db/rls";
+import { members, users as usersTable } from "@heiso/core/lib/db/schema";
+import {
+  hashPassword,
+  verifyPassword as verifyPasswordHash,
+} from "@heiso/core/lib/hash";
+import { signIn, signOut } from "@heiso/core/modules/auth/auth.config";
+import { ensureMemberReviewOnFirstLogin } from "@heiso/core/modules/auth/_server/user.service";
+
+import { and, eq, isNull } from "drizzle-orm";
+import { headers } from "next/headers";
+
+export async function login(username: string, password: string) {
+  try {
+    await signIn("credentials", {
+      username,
+      password,
+      redirect: false, // Prevent automatic redirection after successful login
+    });
+
+    const db = await getDynamicDb();
+    await db
+      .update(usersTable)
+      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(usersTable.email, username));
+
+    return true;
+  } catch (error: any) {
+    if (error?.message === "NEXT_REDIRECT" || error?.digest?.startsWith("NEXT_REDIRECT")) {
+      throw error;
+    }
+    console.error("Error during login:", error);
+    return false; // Return false to indicate login failure
+  }
+}
+
+/**
+ * Verify user password without creating a session.
+ * Returns true if the email exists and the password matches.
+ */
+export async function verifyPasswordOnly(
+  email: string,
+  password: string,
+): Promise<boolean> {
+  try {
+    const db = await getDynamicDb();
+    const user = await db.query.users.findFirst({
+      where: (t, { eq }) => eq(t.email, email),
+      columns: { id: true, password: true },
+    });
+    if (!user) return false;
+
+    const isMatch = await verifyPasswordHash(password, user.password);
+    return !!isMatch;
+  } catch (error) {
+    console.error("Error during verifyPasswordOnly:", error);
+    return false;
+  }
+}
+
+export async function signup(input: {
+  name?: string;
+  email: string;
+  password: string;
+}): Promise<{ id: string; name: string } | null> {
+  const name = input.name?.trim();
+  const email = input.email.trim();
+  const { password } = input;
+
+  // Ensure RLS context for Server Action
+  await ensureTenantContext();
+
+  const db = await getDynamicDb();
+
+  try {
+    // Wrap in Transaction to ensure Atomicity (User Creation + Member Update)
+    await db.transaction(async (tx: Transaction) => {
+      // 1. Check/Create User
+      const existing = await tx.query.users.findFirst({
+        where: (t, { eq }) => eq(t.email, email),
+        columns: { id: true, name: true },
+      });
+
+      let user: { id: string; name: string } | null = null;
+
+      if (existing) {
+        // Update existing
+        const hashed = await hashPassword(password);
+        const [updated] = await tx
+          .update(usersTable)
+          .set({
+            name: name ?? existing.name ?? email.split("@")[0],
+            password: hashed,
+            mustChangePassword: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.id, existing.id))
+          .returning({ id: usersTable.id, name: usersTable.name });
+        user = updated ?? null;
+      } else {
+        // Create new
+        const [created] = await tx
+          .insert(usersTable)
+          .values({
+            email,
+            name: name ?? email.split("@")[0],
+            password: await hashPassword(password),
+          })
+          .returning({ id: usersTable.id, name: usersTable.name });
+        user = created ?? null;
+      }
+
+      // 2. Member Binding (pass `tx` to avoid FK race condition)
+      if (user?.id) {
+      // const [{ total }] = await db
+      //   .select({ total: sql<number>`count(*)` })
+      //   .from(usersTable);
+
+      // const nextStatus = total === 1 ? "joined" : "review";
+      // 不需要審查，直接加入
+        const nextStatus = "joined";
+        console.log("nextStatus: ", nextStatus);
+
+        const headerList = await headers();
+        const tenantId = headerList.get("x-tenant-id") || undefined;
+
+        console.log("[DEBUG] Signup: extracted tenantId from headers:", tenantId);
+
+        // Ensure member exists and bind user
+        await ensureMemberReviewOnFirstLogin(email, user.id, tenantId, tx);
+      }
+    });
+
+    // Return the user
+    return await db.query.users.findFirst({
+      where: (t: any, { eq }: any) => eq(t.email, email),
+      columns: { id: true, name: true }
+    }) ?? null;
+
+  } catch (error) {
+    console.error("Error during signup:", error);
+    return null; // Return false to indicate signup failure
+  }
+}
+
+export async function logout() {
+  try {
+    await signOut({
+      redirect: false,
+    });
+  } catch (error) {
+    console.error("Error during logout:", error);
+    return false; // Return false to indicate login failure
+  }
+}
+
+/**
+ * Check if there is at least one user in DB.
+ */
+export async function hasAnyUser() {
+  const db = await getDynamicDb();
+  const first = await db.query.users.findFirst({
+    columns: { id: true },
+  });
+  return !!first;
+}
+
+export const oAuthLogin = async (provider: string) => {
+  await signIn(provider);
+};
+
+export const oAuthLogout = async () => {
+  await signOut({ redirectTo: "/" });
+};

@@ -1,0 +1,57 @@
+"use server";
+
+import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
+import { users } from "@heiso/core/lib/db/schema";
+import { eq } from "drizzle-orm";
+
+export async function updateAvatar(userId: string, avatar: string) {
+  try {
+    const db = await getDynamicDb();
+    const result = await db
+      .update(users)
+      .set({
+        avatar,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    return {
+      success: true,
+      data: result[0],
+      message: "Avatar updated successfully",
+    };
+  } catch (error) {
+    console.error("Failed to update avatar:", error);
+
+    return {
+      success: false,
+      error: "Failed to update avatar, please try again later",
+    };
+  }
+}
+
+// Function to update nickname
+export async function updateNickname(userId: string, name: string) {
+  try {
+    const db = await getDynamicDb();
+    await db
+      .update(users)
+      .set({
+        name,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+
+    return {
+      success: true,
+      message: "Nickname updated successfully",
+    };
+  } catch (error) {
+    console.error("Failed to update nickname:", error);
+
+    return {
+      success: false,
+      error: "Failed to update nickname, please try again later",
+    };
+  }
+}
