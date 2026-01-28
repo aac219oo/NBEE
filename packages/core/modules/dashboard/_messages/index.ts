@@ -5,7 +5,7 @@ export async function getDashboardMessages(locale: Locale) {
     .default;
 
   const permission = (
-    await import(`../(dashboard)/(permission)/_messages/${locale}.json`)
+    await import(`../../permission/_messages/${locale}.json`)
   ).default;
 
   return {

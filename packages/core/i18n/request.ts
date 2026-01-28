@@ -1,4 +1,4 @@
-import { getDashboardMessages } from "@heiso/core/app/dashboard/_messages";
+import { getDashboardMessages } from "@/modules/dashboard/_messages";
 import { getUserLocale } from "@heiso/core/server/locale";
 import { getRequestConfig } from "next-intl/server";
 

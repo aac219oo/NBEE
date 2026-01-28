@@ -5,7 +5,7 @@ import { Nunito, PT_Sans } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
-import ClientBody from "./ClientBody";
+import ClientBody from "@/providers/ClientBody";
 import "./globals.css";
 
 const nunito = Nunito({

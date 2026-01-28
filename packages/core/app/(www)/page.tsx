@@ -1,5 +1,1 @@
-import { redirect } from "next/navigation";
-
-export default function PortalPage() {
-  redirect("/dashboard");
-}
+export { default } from "@heiso/core/modules/www/page";
