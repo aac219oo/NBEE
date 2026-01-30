@@ -5,7 +5,6 @@ import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import { generalSettings } from "@heiso/core/lib/db/schema";
 import type { Settings } from "@heiso/core/types/system";
 import { getTenantId } from "@heiso/core/lib/utils/tenant";
-import { HiveClient } from "../../../../../hive/src/client";
 
 // 讀取 general_settings（系統級設定）
 async function getGeneralSettings(): Promise<Settings> {
@@ -32,9 +31,15 @@ async function saveGeneralSetting(data: Settings) {
 
     if (tenantId) {
       try {
-        await HiveClient.updateTenant(tenantId, {
-          customDomain: basicSettings.domain || null,
-        });
+        const { getTenantAdapter } = await import("@heiso/core/lib/adapters");
+        const tenantAdapter = getTenantAdapter();
+        if (tenantAdapter) {
+          await tenantAdapter.updateTenant(tenantId, {
+            customDomain: basicSettings.domain || null,
+          });
+        } else {
+          console.warn("[saveGeneralSetting] TenantAdapter not registered, skipping remote update");
+        }
       } catch (error) {
         console.error("Failed to update tenant custom domain", error);
         // We might want to throw here to prevent saving local settings if remote fails

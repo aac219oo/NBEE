@@ -195,23 +195,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Admin User Logic (Skip in Core Mode)
       if (process.env.APP_MODE !== "core" && account?.provider === "credentials" && (user as any).isAdminUser) {
         try {
-          // Use dynamic imports to match core patterns and avoid bundler issues
-          const { drizzle } = await import("drizzle-orm/postgres-js");
-          const postgres = await import("postgres");
-          const { adminUsers } = await import("../../../hive/src/schema");
-          const { eq } = await import("drizzle-orm");
-
-          const connectionString = process.env.HIVE_DATABASE_URL;
-          if (connectionString) {
-            const client = postgres.default(connectionString);
-            const db = drizzle(client);
-
-            // Cast to any to avoid Drizzle version mismatch types
-            await db.update(adminUsers as any)
-              .set({ lastLoginAt: new Date() })
-              .where(eq((adminUsers as any).id, user.id!));
-
-            await client.end();
+          const { getAdminAuthAdapter } = await import("@heiso/core/lib/adapters");
+          const adminAuth = getAdminAuthAdapter();
+          if (adminAuth) {
+            await adminAuth.updateLastLogin(user.id!);
           }
         } catch (e) {
           console.error("[Admin signIn] Failed to update lastLoginAt", e);
@@ -358,34 +345,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // 2. Try Hive Admin User (Skip in Core Mode)
         if (!user && process.env.APP_MODE !== "core") {
           try {
-            const { drizzle } = await import("drizzle-orm/postgres-js");
-            const postgres = await import("postgres");
-            const { adminUsers } = await import("../../../hive/src/schema");
-            const { eq } = await import("drizzle-orm");
-
-            const connectionString = process.env.HIVE_DATABASE_URL;
-            if (connectionString) {
-              const client = postgres.default(connectionString);
-              const db = drizzle(client);
-
-              // Cast table to any for Drizzle version fix
-              const adminUser = await db.select().from(adminUsers as any).where(eq((adminUsers as any).email, username)).limit(1);
-              if (adminUser.length > 0) {
-                const target = adminUser[0];
-                const isMatch = await verifyPassword(password, target.password);
-                await client.end();
-
+            const { getAdminAuthAdapter } = await import("@heiso/core/lib/adapters");
+            const adminAuth = getAdminAuthAdapter();
+            if (adminAuth) {
+              const adminUser = await adminAuth.getAdminUser(username);
+              if (adminUser) {
+                const isMatch = await verifyPassword(password, adminUser.password);
                 if (isMatch) {
                   return {
-                    id: target.id,
-                    name: target.name,
-                    email: target.email,
+                    id: adminUser.id,
+                    name: adminUser.name,
+                    email: adminUser.email,
                     isDeveloper: true,
                     isAdminUser: true,
                   } as User;
                 }
-              } else {
-                await client.end();
               }
             }
           } catch (e) {

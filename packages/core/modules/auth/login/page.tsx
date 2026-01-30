@@ -14,7 +14,6 @@ import {
   getMember,
 } from "../_server/user.service";
 import { headers } from "next/headers";
-import { HiveClient } from "../../../../hive/src/client";
 import { provisionTenantDb, seedDefaults } from "@heiso/core/modules/system/provisioning";
 import { db } from "@heiso/core/lib/db";
 
@@ -65,9 +64,17 @@ export default async function Page({
       } else {
         console.log(`[Login] Tenant ${tenantId} uninitialized. Provisioning via Hive...`);
 
+        const { getTenantAdapter } = await import("@heiso/core/lib/adapters");
+        const tenantAdapter = getTenantAdapter();
+
+        if (!tenantAdapter) {
+          console.error("[Login] Cannot provision: TenantAdapter not registered.");
+          return;
+        }
+
         const h = await headers();
         const host = h.get("host") || "";
-        const resolved = await HiveClient.resolveTenant(host);
+        const resolved = await tenantAdapter.resolveTenant(host);
 
         const cmsModules = resolved.subscriptions['cms'] || [];
         const modules = cmsModules.length > 0 ? cmsModules : ["cms"];
