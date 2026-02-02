@@ -45,3 +45,6 @@ next-env.d.ts
 # turbo
 .turbo
 .gitmodules
+apps/cms
+packages/hive
+apps/hp
