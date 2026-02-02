@@ -6,6 +6,3 @@
 	path = packages/hive
 	url = https://github.com/Heiso-admin/Hive.git
 	branch = main
-[submodule "apps/hp"]
-	path = apps/hp
-	url = https://github.com/Heiso-admin/heiso-hp.git
