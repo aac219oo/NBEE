@@ -185,60 +185,61 @@ const AuthLogin = ({
         }
       />
       {createAuthButton(systemOauth) && (
-        <div className="mt-6">
-          <div className="my-6 space-y-2">{createAuthButton(systemOauth)}</div>
-          <div className="relative">
+        <div className="mt-8">
+          <div className="space-y-3">{createAuthButton(systemOauth)}</div>
+          <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t" />
+              <div className="w-full border-t border-muted/30" />
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-background text-foreground/40">Or</span>
+            <div className="relative flex justify-center text-xs uppercase tracking-widest">
+              <span className="px-4 bg-transparent text-muted-foreground/60 font-bold">
+                {t("or")}
+              </span>
             </div>
           </div>
         </div>
       )}
       <Form {...emailForm}>
         <form
-          className="mt-8 space-y-6"
+          className="mt-2 space-y-6"
           onSubmit={emailForm.handleSubmit(handleEmailSubmit)}
         >
           <div className="space-y-4">
-            <div className="flex flex-col space-y-1">
-              <FormField
-                control={emailForm.control}
-                name="email"
-                render={({ field }) => {
-                  return (
-                    <FormItem>
-                      <FormLabel>{t("email.label")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          id="email-address"
-                          type="email"
-                          autoComplete="email"
-                          placeholder={t("email.placeholder")}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                      {error && (
-                        <p className="w-full text-destructive text-sm">
-                          {error}
-                        </p>
-                      )}
-                    </FormItem>
-                  );
-                }}
-              />
-            </div>
+            <FormField
+              control={emailForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                    {t("email.label")}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      id="email-address"
+                      type="email"
+                      autoComplete="email"
+                      placeholder={t("email.placeholder")}
+                      className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  {error && (
+                    <p className="w-full text-destructive text-sm font-medium mt-1">
+                      {error}
+                    </p>
+                  )}
+                </FormItem>
+              )}
+            />
           </div>
-          <div>
+          <div className="pt-2">
             <ActionButton
               type="submit"
-              className="w-full bg-primary hover:bg-primary/80"
+              className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl shadow-[0_4px_12px_rgba(var(--primary-rgb),0.3)] hover:shadow-[0_6px_20px_rgba(var(--primary-rgb),0.4)] transition-all duration-300 transform hover:-translate-y-0.5"
               loading={isLoading}
             >
-              {t("submit")}
+              <span className="text-lg">{t("submit")}</span>
             </ActionButton>
           </div>
         </form>

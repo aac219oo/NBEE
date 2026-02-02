@@ -8,6 +8,8 @@ import { Label } from "@heiso/core/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@heiso/core/components/ui/card";
 import { useRouter } from "next/navigation";
 import { checkAdminStatus, updateAdminPassword } from "./actions";
+import Header from "../_components/header";
+
 
 export default function DevLoginPage() {
     const [step, setStep] = useState<'login' | 'prompt'>('login');
@@ -84,105 +86,114 @@ export default function DevLoginPage() {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-            <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle>Dev Login Channel</CardTitle>
-                    <CardDescription>Internal Admin Access Only</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {step === 'login' && (
-                        <form onSubmit={handleLoginCheck} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input
-                                    id="email"
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
-                                    placeholder="admin@heiso.io"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                />
-                            </div>
-                            {error && <p className="text-red-500 text-sm">{error}</p>}
-                            <Button type="submit" className="w-full" disabled={loading}>
+        <div className="w-full space-y-6">
+            <Header
+                title="Dev Login Channel"
+                description="Internal Admin Access Only"
+            />
+
+            <div className="mt-8">
+                {step === 'login' && (
+                    <form onSubmit={handleLoginCheck} className="space-y-5">
+                        <div className="space-y-2">
+                            <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">Email</Label>
+                            <Input
+                                id="email"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                placeholder="admin@heiso.io"
+                                className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">Password</Label>
+                            <Input
+                                id="password"
+                                type="password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                            />
+                        </div>
+                        {error && <p className="text-destructive text-sm font-medium ml-1">{error}</p>}
+                        <div className="pt-2">
+                            <Button
+                                type="submit"
+                                className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl shadow-[0_4px_12px_rgba(var(--primary-rgb),0.3)] hover:shadow-[0_6px_20px_rgba(var(--primary-rgb),0.4)] transition-all duration-300 transform hover:-translate-y-0.5"
+                                disabled={loading}
+                            >
                                 {loading ? "Checking..." : "Login"}
                             </Button>
-                        </form>
-                    )}
-
-                    {step === 'prompt' && (
-                        <div className="space-y-4">
-                            <div className="p-4 bg-yellow-100 text-yellow-800 rounded-md text-sm">
-                                Recommendation: This is your first login. Would you like to update your password?
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="new-password">New Password</Label>
-                                <Input
-                                    id="new-password"
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={e => {
-                                        const val = e.target.value;
-                                        setNewPassword(val);
-                                        if (error === "Passwords do not match") {
-                                            if (val === confirmPassword) setError('');
-                                        } else {
-                                            setError('');
-                                        }
-                                    }}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="confirm-password">Confirm Password</Label>
-                                <Input
-                                    id="confirm-password"
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={e => {
-                                        const val = e.target.value;
-                                        setConfirmPassword(val);
-                                        if (error === "Passwords do not match") {
-                                            if (val === newPassword) setError('');
-                                        } else {
-                                            setError('');
-                                        }
-                                    }}
-                                />
-                            </div>
-
-                            {error && <p className="text-red-500 text-sm">{error}</p>}
-
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    className="flex-1"
-                                    onClick={doSignIn}
-                                    disabled={loading}
-                                >
-                                    Skip
-                                </Button>
-                                <Button
-                                    className="flex-1"
-                                    onClick={handleUpdatePassword}
-                                    disabled={!newPassword || !confirmPassword || loading}
-                                >
-                                    Update & Login
-                                </Button>
-                            </div>
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    </form>
+                )}
+
+                {step === 'prompt' && (
+                    <div className="space-y-6">
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl text-sm font-medium leading-relaxed">
+                            Recommendation: This is your first login. Would you like to update your password for better security?
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="new-password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">New Password</Label>
+                            <Input
+                                id="new-password"
+                                type="password"
+                                value={newPassword}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setNewPassword(val);
+                                    if (error === "Passwords do not match") {
+                                        if (val === confirmPassword) setError('');
+                                    } else {
+                                        setError('');
+                                    }
+                                }}
+                                className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="confirm-password" className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">Confirm Password</Label>
+                            <Input
+                                id="confirm-password"
+                                type="password"
+                                value={confirmPassword}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setConfirmPassword(val);
+                                    if (error === "Passwords do not match") {
+                                        if (val === newPassword) setError('');
+                                    } else {
+                                        setError('');
+                                    }
+                                }}
+                                className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                            />
+                        </div>
+
+                        {error && <p className="text-destructive text-sm font-medium ml-1">{error}</p>}
+
+                        <div className="flex gap-4 pt-2">
+                            <Button
+                                variant="outline"
+                                className="flex-1 h-12 rounded-xl border-white/10 hover:bg-white/5"
+                                onClick={doSignIn}
+                                disabled={loading}
+                            >
+                                Skip
+                            </Button>
+                            <Button
+                                className="flex-1 h-12 bg-primary text-primary-foreground font-bold rounded-xl shadow-[0_4px_12px_rgba(var(--primary-rgb),0.3)] hover:shadow-[0_6px_20px_rgba(var(--primary-rgb),0.4)] transition-all duration-300"
+                                onClick={handleUpdatePassword}
+                                disabled={!newPassword || !confirmPassword || loading}
+                            >
+                                Update & Login
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

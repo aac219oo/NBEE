@@ -89,86 +89,86 @@ export default function LoginPassword({
       <Form {...form}>
         <form className="mt-8 space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
           <div className="space-y-4">
-            <div className="flex flex-col space-y-1">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => {
-                  return (
-                    <FormItem>
-                      <FormLabel>{t("email.label")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          id="email-address"
-                          type="email"
-                          autoComplete="email"
-                          placeholder={t("email.placeholder")}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  );
-                }}
-              />
-            </div>
-            <div className="flex flex-col space-y-1">
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => {
-                  return (
-                    <FormItem>
-                      <FormLabel className="flex items-center">
-                        {t("password.label")}
-                        <a
-                          className="ml-auto inline-block text-sm text-sub-highlight hover:text-sub-highlight/60"
-                          href={`/auth/forgot-password?email=${encodeURIComponent(email || form.watch("email") || "")}`}
-                          tabIndex={-1}
-                        >
-                          {t("password.forgot")}
-                        </a>
-                      </FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          id="password"
-                          autoComplete="current-password"
-                          placeholder={t("password.placeholder")}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                      {error && (
-                        <p className="w-full text-center text-destructive/80">
-                          {error}
-                        </p>
-                      )}
-                    </FormItem>
-                  );
-                }}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                    {t("email.label")}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      id="email-address"
+                      type="email"
+                      autoComplete="email"
+                      placeholder={t("email.placeholder")}
+                      className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center text-xs font-bold uppercase tracking-wider text-muted-foreground/80 ml-1">
+                    {t("password.label")}
+                    <a
+                      className="ml-auto inline-block text-[10px] text-primary hover:text-primary/80 transition-colors uppercase tracking-widest"
+                      href={`/auth/forgot-password?email=${encodeURIComponent(email || form.watch("email") || "")}`}
+                      tabIndex={-1}
+                    >
+                      {t("password.forgot")}
+                    </a>
+                  </FormLabel>
+                  <FormControl>
+                    <PasswordInput
+                      id="password"
+                      autoComplete="current-password"
+                      placeholder={t("password.placeholder")}
+                      className="h-12 bg-background/50 border-white/20 focus:border-primary/50 transition-all rounded-xl"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                  {error && (
+                    <p className="w-full text-destructive text-sm font-medium mt-1">
+                      {error}
+                    </p>
+                  )}
+                </FormItem>
+              )}
+            />
           </div>
-          <ActionButton
-            type="submit"
-            className="w-full bg-primary hover:bg-primary/80"
-            loading={form.formState.isSubmitting}
-          >
-            {t("submit")}
-          </ActionButton>
+          <div className="pt-2">
+            <ActionButton
+              type="submit"
+              className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl shadow-[0_4px_12px_rgba(var(--primary-rgb),0.3)] hover:shadow-[0_6px_20px_rgba(var(--primary-rgb),0.4)] transition-all duration-300 transform hover:-translate-y-0.5"
+              loading={form.formState.isSubmitting}
+            >
+              <span className="text-lg">{t("submit")}</span>
+            </ActionButton>
+          </div>
           <AuthRedirectHint>
-            {t.rich("backToLogin", {
-              Link: (chunks) => (
-                <Button
-                  variant="link"
-                  className="text-neutral font-normal p-0 underline"
-                  onClick={() => setStep(LoginStepEnum.Email)}
-                  type="button"
-                >
-                  {chunks}
-                </Button>
-              ),
-            })}
+            <div className="flex justify-center">
+              {t.rich("backToLogin", {
+                Link: (chunks) => (
+                  <Button
+                    variant="link"
+                    className="text-muted-foreground hover:text-primary font-medium p-0 h-auto text-sm transition-colors"
+                    onClick={() => setStep(LoginStepEnum.Email)}
+                    type="button"
+                  >
+                    {chunks}
+                  </Button>
+                ),
+              })}
+            </div>
           </AuthRedirectHint>
         </form>
       </Form>

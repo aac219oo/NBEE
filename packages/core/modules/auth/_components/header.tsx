@@ -9,10 +9,16 @@ export default function Header({
 }) {
   return (
     <div
-      className={`flex flex-col items-center space-y-4 font-lato ${className}`}
+      className={`flex flex-col items-center space-y-2 font-lato ${className}`}
     >
-      <h1 className="text-3xl font-bold text-center">{title}</h1>
-      <p className="mt-2 text-center text-sm text-neutral">{description}</p>
+      <h1 className="text-3xl md:text-4xl font-black text-center tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70">
+        {title}
+      </h1>
+      {description && (
+        <p className="text-center text-sm font-medium text-muted-foreground/80">
+          {description}
+        </p>
+      )}
     </div>
   );
 }

@@ -207,7 +207,7 @@ export default function OTPLoginForm({
                         <InputOTPGroup key={slotKeys[i]}>
                           <InputOTPSlot
                             index={i}
-                            className="text-xl w-12 h-15"
+                            className="text-xl w-12 h-14 bg-background/50 border-white/20 rounded-xl"
                           />
                         </InputOTPGroup>
                       ))}
@@ -215,7 +215,7 @@ export default function OTPLoginForm({
                   </FormControl>
                   <FormMessage className="w-full text-center" />
                   {error && (
-                    <p className="w-full text-sm text-destructive/80 text-center">
+                    <p className="w-full text-sm text-destructive font-medium text-center mt-2">
                       {error}
                     </p>
                   )}
@@ -228,7 +228,7 @@ export default function OTPLoginForm({
               type="button"
               onClick={handleResendOTP}
               disabled={countdown > 0 || isLoading}
-              className="text-sm"
+              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors disabled:text-muted-foreground/60"
             >
               {countdown > 0
                 ? t("resend.countdown", { seconds: countdown })
@@ -236,29 +236,31 @@ export default function OTPLoginForm({
             </button>
           </div>
 
-          <div className="mb-2">
+          <div className="pt-2">
             <ActionButton
               type="submit"
-              className="group relative flex w-full justify-center"
+              className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl shadow-[0_4px_12px_rgba(var(--primary-rgb),0.3)] hover:shadow-[0_6px_20px_rgba(var(--primary-rgb),0.4)] transition-all duration-300 transform hover:-translate-y-0.5"
               loading={isLoading}
             >
-              {t("submit.verify")}
+              <span className="text-lg">{t("submit.verify")}</span>
             </ActionButton>
           </div>
         </form>
         <AuthRedirectHint>
-          {t.rich("backToLogin", {
-            Link: (chunks) => (
-              <Button
-                variant="link"
-                className="text-neutral font-normal p-0 underline"
-                onClick={() => setStep(LoginStepEnum.Email)}
-                type="button"
-              >
-                {chunks}
-              </Button>
-            ),
-          })}
+          <div className="flex justify-center">
+            {t.rich("backToLogin", {
+              Link: (chunks) => (
+                <Button
+                  variant="link"
+                  className="text-muted-foreground hover:text-primary font-medium p-0 h-auto text-sm transition-colors"
+                  onClick={() => setStep(LoginStepEnum.Email)}
+                  type="button"
+                >
+                  {chunks}
+                </Button>
+              ),
+            })}
+          </div>
         </AuthRedirectHint>
       </Form>
     </>

@@ -50,7 +50,7 @@ export async function Header({
                         <Logo
                           hasTitle={false}
                           classNames={{
-                            img: "h-8 w-auto text-primary",
+                            img: "h-10 w-auto text-primary",
                           }}
                         />
                       </BreadcrumbLink>

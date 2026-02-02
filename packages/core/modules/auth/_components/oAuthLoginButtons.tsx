@@ -17,20 +17,21 @@ const OAuthLoginButtons = ({
   ...props
 }: React.ComponentProps<"button"> & OAuthLoginButtonsProps) => {
   return (
-    <Button asChild variant="outline" className="w-full rounded-4xl" {...props}>
-      <a href={href} className="flex items-center gap-2">
+    <Button asChild variant="outline" className="w-full rounded-xl py-6 bg-white/5 hover:bg-white/10 border-white/10 hover:border-white/20 transition-all duration-300" {...props}>
+      <a href={href} className="flex items-center justify-center gap-3 w-full">
         {src && (
           <Image
             src={src}
             alt={alt}
-            width={20}
-            height={20}
+            width={24}
+            height={24}
+            className="shrink-0"
             loading="lazy"
             decoding="async"
           />
         )}
-        {icon && <Icon icon={icon} className="size-5" />}
-        <span>{`Sign in with ${alt}`}</span>
+        {icon && <Icon icon={icon} className="size-6 shrink-0" />}
+        <span className="font-semibold text-foreground/80">{`Sign in with ${alt}`}</span>
       </a>
     </Button>
   );

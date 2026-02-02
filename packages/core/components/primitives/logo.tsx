@@ -1,8 +1,8 @@
 "use client";
 
 import { useSite } from "@heiso/core/providers/site";
-import Image from "next/image";
 import Link from "next/link";
+import { cn } from "@heiso/core/lib/utils";
 // import config from '@heiso/core/config';
 
 export function Logo({
@@ -24,19 +24,29 @@ export function Logo({
 }) {
   const { site } = useSite();
 
+  const logoSrc = site?.assets?.logo?.trim()
+    ? site.assets.logo.startsWith("http") || site.assets.logo.startsWith("/")
+      ? site.assets.logo
+      : `/${site.assets.logo}`
+    : "/images/logo.png";
+
   return (
     <Link
       href={href}
       className={classNames.main}
       title={title ?? site?.basic?.title ?? ""}
     >
-      <Image
-        src={site?.assets?.logo?.length ? site.assets.logo : "/images/logo.png"}
-        alt={site?.basic?.title ?? site?.basic?.title ?? ""}
-        width={1000}
-        height={1000}
-        priority
-        className={classNames.img ?? "h-8 w-auto text-primary"}
+      <img
+        src={logoSrc}
+        alt={title ?? site?.basic?.title ?? "Logo"}
+        className={cn(
+          "object-contain transition-all duration-300",
+          classNames.img ?? "h-8 w-auto text-primary"
+        )}
+        loading="eager"
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = "none";
+        }}
       />
       {hasTitle && (
         <div className={classNames.text ?? "text-lg font-bold"}>
