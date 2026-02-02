@@ -1,6 +1,6 @@
 "use client";
 
-import { Logo } from "@heiso/core/components/primitives/logo";
+
 import { ThemeSwitcher } from "@heiso/core/components/primitives/theme-switcher";
 import { useSite } from "@heiso/core/providers/site";
 
@@ -20,11 +20,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </Link> */}
       <main className="w-full max-w-lg bg-background dark:bg-sub-background py-16 px-12 rounded-[12px] shadow-[1px_1px_4px_0_rgba(0,0,0,0.1)] shadow-primary/70 relative">
         <div className="flex flex-col items-center justify-center mb-4">
-          <Logo
-            hasTitle={false}
-            classNames={{
-              img: "h-12 w-auto mb-4 text-primary",
-            }}
+          <img
+            src="https://www.heiso.io/assets/heiso-logo-CfRdn2DU.svg"
+            alt="Logo"
+            className="h-12 w-auto mb-4"
           />
         </div>
         {children}
@@ -50,8 +49,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </Link>
           </p> */}
           <p>
-            © 2024 {site?.branding?.organization || "Codists"}. All rights
-            reserved.
+            © {new Date().getFullYear()} Heiso INC
           </p>
         </div>
       </footer>
