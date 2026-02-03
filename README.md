@@ -1,38 +1,48 @@
 # NBEE Monorepo
 
-歡迎來到 **NBEE** 專案！這是一個使用 [TurboRepo](https://turbo.build/) 和 [Bun](https://bun.sh/) 管理的現代化單體倉庫 (Monorepo)，設計用於託管多個應用程式與共用套件。
+歡迎來到 **NBEE** 專案！這是一個使用 [TurboRepo](https://turbo.build/) 和 [Bun](https://bun.sh/) 管理的現代化單體倉庫 (Monorepo)，核心架構基於 Next.js 16。
 
 [English Version](#nbee-monorepo-english)
 
 ---
+
+## 🚀 核心技術棧
+
+- **Runtime**: [Bun](https://bun.sh/)
+- **Framework**: Next.js 16 (App Router)
+- **Styling**: Tailwind CSS v4
+- **ORM**: Drizzle ORM
+- **Lint/Format**: Biome
+- **Build System**: TurboRepo
 
 ## 📂 專案結構
 
 ```text
 .
 ├── apps/
-│   └── web/          # 主要的 Web 應用程式 (Next.js)
+│   └── web/                # 主要的 Web 應用程式 (Next.js)
 ├── packages/
-│   └── core/         # 共用核心元件與邏輯 (Next.js/Library)
-├── package.json      # 根目錄設定檔
-├── turbo.json        # TurboRepo 建置流程設定
-└── .gitmodules       # Git 子模組設定
+│   ├── core/               # 核心元件、業務邏輯與 API (Next.js 16)
+│   ├── biome-config/       # 共用的 Biome 檢查規則
+│   └── typescript-config/  # 基礎 TypeScript 設定
+├── package.json            # 根目錄依賴與指令管理
+└── turbo.json              # TurboRepo 建置流程設定
 ```
 
 ## 🚀 快速開始
 
 ### 前置需求
 
-- [Bun](https://bun.sh/) (Runtime & Package Manager)
+- 安裝 [Bun](https://bun.sh/) (建議版本 v1.3.5 以上)
 - Git
 
 ### 安裝步驟
 
-1.  **複製專案** (包含子模組):
-    ```bash
+1. **複製專案**:
+   ```bash
     git clone --recursive <REPO_URL>
-    cd nbee
-    ```
+   cd nbee
+   ```
 
     *如果您複製時忘記加 recursive 參數:*
     ```bash
@@ -40,128 +50,60 @@
     ```
 
 2.  **安裝依賴**:
-    ```bash
-    bun install
-    ```
+   ```bash
+   bun install
+   ```
+
+3.  **環境變數設定**:
+    在開始開發前，請確保設定必要的環境變數。您可以參考 `packages/core/.env.example`：
+    - 複製 `packages/core/.env.example` 並重新命名為 `.env.local`。
+    - 依照您的環境需求修改檔案內容（例如 `DATABASE_URL`）。
 
 ### 💻 本地開發
 
 啟動所有應用程式的開發伺服器:
 
 ```bash
-bun run dev
+bun dev
 ```
 
-或只啟動特定應用程式:
-
+或進入特定目錄開發：
 ```bash
-# 只啟動 CMS
-cd apps/cms
-bun run dev
-
-# 只啟動 Core (若有的話)
 cd packages/core
-bun run dev
+bun dev
 ```
 
-## 🛠️ 建置與部署 (Vercel)
+## 📦 資料庫管理 (Drizzle)
 
-本專案配置為使用同一個倉庫但在 Vercel 上建立分開的專案來部署多個應用程式。
+在根目錄執行以下指令來管理資料庫結構：
 
-### 1. 專案: CMS (主網站)
-- **Root Directory (根目錄)**: `(空白)` (專案根目錄)
-- **Install Command (安裝指令)**: `git submodule update --init --recursive && bun install`
-- **Build Command (建置指令)**: `cd apps/cms && bun run build`
-  - *可選用 Turbo: `turbo run build --filter=cms`*
-- **Output Directory (輸出目錄)**: `apps/cms/.next`
-
-### 2. 專案: Core (獨立展示)
-- **Root Directory**: `(空白)` (專案根目錄)
-- **Install Command**: `git submodule update --init --recursive && bun install`
-- **Build Command**: `cd packages/core && bun run build`
-  - *可選用 Turbo: `turbo run build --filter=@heiso/core`*
-- **Output Directory**: `packages/core/.next`
-
-## 📦 資料庫與結構
-
-我們使用 **Drizzle ORM**。
-
-- **推送到開發資料庫**: `bun db:push`
+- **推送到資料庫**: `bun db:push`
 - **生成遷移檔案**: `bun db:generate`
+- **啟動 Studio**: `bun drizzle-kit studio` (需進入 core 目錄)
 
-
-> 注意：請確保您的 `.env` 檔案已正確設定資料庫連線。
-
-## 🔄 更新子模組 (Submodules)
-
-當 `apps/` 或 `packages/` 內的子模組有更新時，請依照以下步驟同步到主倉庫：
-
-1.  進入子模組目錄並切換到最新版本 (Checkout)：
-    ```bash
-    cd apps/cms
-    git pull origin main
-    cd ../..
-    ```
-2.  **重要：在根目錄執行本地測試**：
-    ```bash
-    bun run build && bun lint
-    # 確認 Build 成功後才執行下一步
-    ```
-3.  在根目錄提交變更：
-
-    ```bash
-    git add apps/cms
-    git commit -m "chore(submodule): update cms to latest" # message參考就好，請依據情況調整
-    git push
-    ```
-
-> **提示**：主專案 (Monorepo) 必須推送至 GitHub 後，Vercel 才會偵測到子模組指標 (Pointer) 的變更並開始部署。
-
-
-
-## ➕ 新增子模組 (Add Submodule)
-
-### 標準流程 (目錄完全不存在時)
-
-```bash
-# 在專案根目錄執行
-git submodule add <Git倉庫URL> <存放路徑>
-
-# 例如
-git submodule add https://github.com/Heiso-admin/web.git apps/web
-```
-
-### 2. 現有目錄轉子模組 (尚未有遠端倉庫)
-若您本機已經有專案目錄，但還沒建立遠端 Repo：
-
-1.  **建立遠端倉庫**：先在 GitHub/GitLab 建立一個空的 Repository。
-2.  **推送現有程式碼**：
-    ```bash
-    cd apps/my-app
-    git init
-    git add .
-    git commit -m "Initial commit"
-    git remote add origin <REPO_URL>
-    git push -u origin main
-    ```
-3.  **轉換為子模組**：
-    ```bash
-    cd ../..             # 回到根目錄
-    rm -rf apps/my-app   # 移除本地目錄 (確認已推送成功！)
-    git submodule add <REPO_URL> apps/my-app
-    ```
+> 注意：請確保專案根目錄或套件目錄下的 `.env` 檔案已正確設定資料庫連線字串。
 
 ## 🤝 貢獻指南
 
-1.  建立功能分支 (Feature Branch)。
-2.  在對應目錄 (`apps/` 或 `packages/`) 進行修改。
-3.  Commit 並 Push 以送出 Pull Request。
+1. 建立功能分支 (Feature Branch)。
+2. 在 `packages/core` 或相關套件中進行修改。
+3. 確保通過 Biome 檢查：`bun lint`。
+4. 提交並 Push 以送出 Pull Request。
 
 ---
 
 # NBEE Monorepo (English)
 
-Welcome to the **NBEE** project! This is a modern monorepo managed with [TurboRepo](https://turbo.build/) and [Bun](https://bun.sh/), designed to host multiple applications and shared packages.
+Welcome to **NBEE**! This is a modern monorepo managed with [TurboRepo](https://turbo.build/) and [Bun](https://bun.sh/), built on Next.js 16.
+
+## 🚀 Core Technology Stack
+
+- **Runtime**: [Bun](https://bun.sh/)
+- **Framework**: Next.js 16 (App Router)
+- **Styling**: Tailwind CSS v4
+- **ORM**: Drizzle ORM
+- **Lint/Format**: Biome
+- **Build System**: TurboRepo
 
 ## 📂 Project Structure
 
@@ -170,26 +112,27 @@ Welcome to the **NBEE** project! This is a modern monorepo managed with [TurboRe
 ├── apps/
 │   └── web/          # The main Web application (Next.js)
 ├── packages/
-│   └── core/         # Shared core components and logic (Next.js/Library)
-├── package.json      # Root configuration
-├── turbo.json        # TurboRepo build pipeline
-└── .gitmodules       # Submodule configuration
+│   ├── core/               # Core components, business logic, and APIs (Next.js 16)
+│   ├── biome-config/       # Shared Biome linting & formatting rules
+│   └── typescript-config/  # Base TypeScript configurations
+├── package.json            # Root configuration & scripts
+└── turbo.json              # TurboRepo build pipeline
 ```
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) (Runtime & Package Manager)
+- [Bun](https://bun.sh/) (v1.3.5 or higher recommended)
 - Git
 
 ### Installation
 
-1.  **Clone the repository** (including submodules):
-    ```bash
+1. **Clone the repository**:
+   ```bash
     git clone --recursive <REPO_URL>
-    cd nbee
-    ```
+   cd nbee
+   ```
 
     *If you already cloned without submodules:*
     ```bash
@@ -197,122 +140,44 @@ Welcome to the **NBEE** project! This is a modern monorepo managed with [TurboRe
     ```
 
 2.  **Install dependencies**:
-    ```bash
-    bun install
-    ```
+   ```bash
+   bun install
+   ```
+
+3.  **Environment Variables**:
+    Before starting development, ensure you set up the necessary environment variables. Refer to `packages/core/.env.example`:
+    - Copy `packages/core/.env.example` to `.env.local`.
+    - Update the variables (e.g., `DATABASE_URL`) according to your environment.
 
 ### 💻 Local Development
 
-To start the development server for all apps:
-
+Start the development environment for all packages:
 ```bash
-bun run dev
+bun dev
 ```
 
-Or just for a specific app:
-
+Or target a specific package:
 ```bash
-# Start only the CMS
-cd apps/cms
-bun run dev
-
-# Start only the Core (if applicable)
 cd packages/core
-bun run dev
+bun dev
 ```
 
-## 🛠️ Build & Deployment (Vercel)
+## 📦 Database Management (Drizzle)
 
-This project is configured to deploy multiple apps from the same repository using separate Vercel Projects.
+Run these commands from the root to manage your schema:
 
-### 1. Project: CMS (Main Site)
-- **Root Directory**: `(empty)` (Project Root)
-- **Install Command**: `git submodule update --init --recursive && bun install`
-- **Build Command**: `cd apps/cms && bun run build`
-  - *Optionally use Turbo: `turbo run build --filter=cms`*
-- **Output Directory**: `apps/cms/.next`
+- **Push to database**: `bun db:push`
+- **Generate migrations**: `bun db:generate`
+- **Start Studio**: `bun drizzle-kit studio` (within the core directory)
 
-### 2. Project: Core (Demo / Components)
-- **Root Directory**: `(empty)` (Project Root)
-- **Install Command**: `git submodule update --init --recursive && bun install`
-- **Build Command**: `cd packages/core && bun run build`
-  - *Optionally use Turbo: `turbo run build --filter=@heiso/core`*
-- **Output Directory**: `packages/core/.next`
-
-## 📦 Database & Schema
-
-We use **Drizzle ORM**.
-
-- **Push Schema (Dev)**: `bun db:push`
-- **Generate Migrations**: `bun db:generate`
-
-
-> Note: Ensure your `.env` is configured correctly for database connections.
-
-## 🔄 Updating Submodules
-
-When submodules in `apps/` or `packages/` have updates, follow these steps to sync them to the main repository:
-
-1.  Enter the submodule directory and checkout the latest version:
-    ```bash
-    cd apps/cms
-    git pull origin main
-    cd ../..
-    ```
-2.  **Important: Run local tests in root directory**:
-    ```bash
-    bun run build && bun lint
-    # Confirm Build success before proceeding
-    ```
-3.  Commit the changes in the root directory:
-
-    ```bash
-    git add apps/cms
-    git commit -m "chore(submodule): update cms to latest" # message for reference only, adjust as needed
-    git push
-    ```
-
-> **Tip**: Vercel will only trigger a deployment after you push the main monorepo changes to GitHub.
-
-
-
-## ➕ Adding Submodules
-
-### Standard Flow (New Directory)
-
-```bash
-# Run in the project root
-git submodule add <Repo URL> <Destination Path>
-
-# Example
-git submodule add https://github.com/Heiso-admin/web.git apps/web
-```
-
-### 2. Existing Local Project to Submodule (No Remote Yet)
-If you have a local project directory but haven't created a remote repository:
-
-1.  **Create Remote Repo**: Create an empty repository on GitHub/GitLab.
-2.  **Push Local Code**:
-    ```bash
-    cd apps/my-app
-    git init
-    git add .
-    git commit -m "Initial commit"
-    git remote add origin <REPO_URL>
-    git push -u origin main
-    ```
-3.  **Convert to Submodule**:
-    ```bash
-    cd ../..             # Return to root
-    rm -rf apps/my-app   # Remove local directory (Ensure push was successful!)
-    git submodule add <REPO_URL> apps/my-app
-    ```
+> Note: Ensure your `.env` file is properly configured with your database connection string.
 
 ## 🤝 Contribution
 
-1.  Create a feature branch.
-2.  Make your changes in `apps/` or `packages/`.
-3.  Commit and push to create a Pull Request.
+1. Create a feature branch.
+2. Make changes in `packages/core` or relevant packages.
+3. Ensure the project passes linting: `bun lint`.
+4. Commit and push to create a Pull Request.
 
 ---
 Powered by [NBEE Team](https://github.com/Heiso-admin)

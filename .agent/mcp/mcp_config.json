@@ -1,0 +1,47 @@
+// Antigravity mcp config
+{
+  "mcpServers": {
+    "next-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "next-devtools-mcp@latest"
+      ]
+    },
+    "supabase-mcp-server": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "YOUR_SUPABASE_ACCESS_TOKEN",
+        "--project-ref",
+        "YOUR_SUPABASE_PROJECT_REF"
+      ]
+    },
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ],
+      "env": {
+        "FIRECRAWL_API_KEY": "YOUR_FIRECRAWL_API_KEY"
+      }
+    },
+    "postgres": {
+      "command": "/opt/homebrew/bin/uv",
+      "args": [
+        "tool",
+        "run",
+        "--python",
+        "3.12",
+        "postgres-mcp",
+        "--access-mode=unrestricted"
+      ],
+      "env": {
+        "DATABASE_URI": "postgresql://[YOUR_POSTGRES_USER]:[YOUR_POSTGRES_PASSWORD]@[YOUR_POSTGRES_HOST]:[YOUR_POSTGRES_PORT]/[YOUR_POSTGRES_DB]"
+      }
+    }
+  }
+}
