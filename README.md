@@ -83,6 +83,21 @@ bun dev
 
 > 注意：請確保專案根目錄或套件目錄下的 `.env` 檔案已正確設定資料庫連線字串。
 
+## 🛠️ MCP (Model Context Protocol) 設定
+
+為了提升 AI 輔助開發的體驗，本專案支援 MCP。這讓 AI 代理人可以即時存取專案狀態與資料庫。
+
+### 1. Next.js MCP
+Next.js 16 原生支援 MCP。當您執行 `bun dev` 時，AI 可以透過 `/_next/mcp` 端點取得即時資訊。
+
+### 2. Supabase MCP
+建議設定 Supabase MCP 讓 AI 能夠直接查詢資料庫結構，輔助編寫 SQL 或 Drizzle Schema。
+- **可參考**: [supabase-mcp](https://supabase.com/docs/guides/getting-started/mcp)
+
+### 3. Postgres MCP
+建議設定 Postgres MCP 讓 AI 能夠直接查詢資料庫結構，輔助編寫 SQL 或 Drizzle Schema。
+- **可參考**: [postgres-mcp](https://github.com/crystaldba/postgres-mcp)
+
 ## 🤝 貢獻指南
 
 1. 建立功能分支 (Feature Branch)。
@@ -171,6 +186,21 @@ Run these commands from the root to manage your schema:
 - **Start Studio**: `bun drizzle-kit studio` (within the core directory)
 
 > Note: Ensure your `.env` file is properly configured with your database connection string.
+
+## 🛠️ MCP (Model Context Protocol) Setup
+
+This project supports MCP to enhance AI-assisted development, allowing AI agents to access real-time project state and your database.
+
+### 1. Next.js MCP
+Next.js 16 provides native MCP support. When running `bun dev`, AI agents can access runtime information via the `/_next/mcp` endpoint.
+
+### 2. Supabase MCP
+We recommend setting up a Supabase MCP server to allow AI agents to inspect your database schema and help with queries or Drizzle schema updates.
+- **Reference**: [supabase-mcp](https://supabase.com/docs/guides/getting-started/mcp)
+
+### 3. Postgres MCP
+We recommend setting up a Postgres MCP server to allow AI agents to inspect your database schema and help with queries or Drizzle schema updates.
+- **Reference**: [postgres-mcp](https://github.com/crystaldba/postgres-mcp)
 
 ## 🤝 Contribution
 
