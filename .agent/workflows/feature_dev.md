@@ -15,6 +15,7 @@ description: 標準化功能開發流程 (Standard Feature Development Workflow)
 3.  **檢查依賴**: 確認是否需要新增 `./package.json` 依賴或修改 `drizzle` Schema。
 
 ## 2. 實作規範 (Implementation)
+-   **SKILLS**: 使用 skills/nbee-dev 開發專案。
 -   **MCP**: 使用 next-devtools, Supabase, postgres，取得最新資訊。
 -   **語言**: 使用 TypeScript。
 -   **樣式**: 優先使用 Tailwind CSS。
@@ -35,14 +36,6 @@ description: 標準化功能開發流程 (Standard Feature Development Workflow)
 
 ## 4. 文件同步 (Documentation Sync)
 -   如果實作過程中發現規格書 (`NBEE-Doc`) 有誤或不可行，**先跟使用者確認後**並更新規格書，保持文件與程式碼的一致性。
-
-## 5. 提交與部署 (Commit & Deploy)
-1.  **Submodule 處理** (若有修改 core 或其他 apps):
-    -   先在子模組內 Commit & Push。
-    -   **回到根目錄**，更新 Submodule Pointer。
-2.  **Root Commit**:
-    -   使用 Conventional Commits (e.g., `feat:`, `fix:`, `chore:`).
-    -   範例: `feat(cms): implement navigation ordering logic`
 
 ---
 > **Pro Tip**: 遇到不確定的功能邏輯，請隨時回頭查閱 `NBEE-Doc`，不要猜測。

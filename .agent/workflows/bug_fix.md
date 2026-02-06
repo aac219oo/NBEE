@@ -18,6 +18,7 @@ description: 標準化 Bug 修復流程 (Standard Bug Fix Workflow)
 ## 2. 修復策略 (Plan Fix)
 -   **最小影響原則**: 修復應針對 Root Cause，避免副作用 (Side Effects)。
 -   **Core Fix 注意事項**: 若修改 `core`，需思考是否會影響其他潛在使用該元件的 App。
+-   **腳本生成規則**: 若需要生成debug用腳本程式請在 `../scripts` 這個目錄中生成。
 
 ## 3. 實作與驗證 (Implement & Verify)
 1.  **執行修復**。
@@ -30,19 +31,13 @@ description: 標準化 Bug 修復流程 (Standard Bug Fix Workflow)
     bun run build  # 確保修復沒有破壞 Build
     ```
 
+## 5. debug腳本規則 (Scripts rules)
+1.  **確認之後還是否需要重複使用腳本**。
+2.  如不需要繼續使用腳本請參考 `.agent/workflows/cleanup-debug.md` 的流程。
+
 ## 4. 文件更新 (Documentation)
 -   若 Bug 修復涉及邏輯變更或特殊 Edge Case 處理，需在程式碼中加入註解。
 -   若影響操作流程，需更新 `NBEE-Doc/` 下對應的文件。
-
-## 5. 提交與部署 (Commit & Deploy)
-1.  **Submodule 處理** (若修改子模組):
-    -   `git commit` (in module).
-    -   Root Directory 更新 Pointer。
-2.  **Root Commit**:
-    -   使用 `fix:` prefix。
-    -   範例: `fix(core): resolve infinite loop in settings provider`
-3.  **Push**:
-    -   推送到儲存庫觸發部署。
 
 ---
 > **Rule of Thumb**: "Fix the problem, not just the symptom." (解決問題根源，而非只是掩蓋症狀)
