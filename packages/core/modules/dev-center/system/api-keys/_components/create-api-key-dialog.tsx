@@ -21,17 +21,18 @@ import {
 } from "@heiso/core/components/ui/form";
 import { Input } from "@heiso/core/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@heiso/core/components/ui/popover";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@heiso/core/components/ui/select";
 import { Switch } from "@heiso/core/components/ui/switch";
-import { Textarea } from "@heiso/core/components/ui/textarea";
 import type { TPublicApiKey } from "@heiso/core/lib/db/schema";
 import { cn } from "@heiso/core/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
-import { CalendarIcon, Check, Copy } from "lucide-react";
+import { addMonths, addYears } from "date-fns";
+import { Check, Copy } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -44,12 +45,9 @@ const createApiKeySchema = z.object({
     .string()
     .min(1, "Name is required")
     .max(100, "Name must be less than 100 characters"),
-  description: z
-    .string()
-    .max(500, "Description must be less than 500 characters")
-    .optional(),
-  expiresAt: z.date().optional(),
+  expiresAt: z.string().optional(),
   isActive: z.boolean(),
+  rateLimitPlan: z.string(),
   rateLimit: z
     .object({
       requests: z.number().int().min(1, "Requests must be at least 1"),
@@ -79,15 +77,17 @@ export function CreateApiKeyDialog({
     apiKey: TPublicApiKey;
   } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const form = useForm<CreateApiKeyFormData>({
     resolver: zodResolver(createApiKeySchema),
     defaultValues: {
       name: "",
-      description: "",
+      expiresAt: "1.5_years",
       isActive: true,
+      rateLimitPlan: "standard",
       rateLimit: {
-        requests: 100,
+        requests: 500,
         window: 60,
       },
     },
@@ -96,12 +96,28 @@ export function CreateApiKeyDialog({
   const handleSubmit = (data: CreateApiKeyFormData) => {
     startTransition(async () => {
       try {
+        let expiresAtDate: Date | null = null;
+        if (data.expiresAt === "1_year") {
+          expiresAtDate = addYears(new Date(), 1);
+        } else if (data.expiresAt === "1.5_years") {
+          expiresAtDate = addMonths(new Date(), 18);
+        } else if (data.expiresAt === "3_years") {
+          expiresAtDate = addYears(new Date(), 3);
+        }
+
+        let rateLimit = { requests: 500, window: 60 };
+        if (data.rateLimitPlan === "professional") {
+          rateLimit = { requests: 1000, window: 60 };
+        } else if (data.rateLimitPlan === "enterprise") {
+          rateLimit = { requests: 3000, window: 60 };
+        }
+
         const result = await createApiKey({
           name: data.name,
-          description: data.description || null,
-          expiresAt: data.expiresAt || null,
+          description: null,
+          expiresAt: expiresAtDate,
           isActive: data.isActive,
-          rateLimit: data.rateLimit,
+          rateLimit,
         });
 
         if (result.success && result.apiKey) {
@@ -189,60 +205,34 @@ export function CreateApiKeyDialog({
 
                 <FormField
                   control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("description")}</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder={t("description_placeholder")}
-                          className="resize-none"
-                          rows={3}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>{t("description_help")}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="expiresAt"
                   render={({ field }) => (
-                    <FormItem className="flex flex-col">
+                    <FormItem>
                       <FormLabel>{t("expires_at")}</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                "w-full pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground",
-                              )}
-                            >
-                              {field.value ? (
-                                format(field.value, "PPP")
-                              ) : (
-                                <span>{t("pick_date")}</span>
-                              )}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormDescription>{t("expires_at_help")}</FormDescription>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="1_year">
+                            {t("expires_1_year")}
+                          </SelectItem>
+                          <SelectItem value="1.5_years">
+                            {t("expires_1_5_years")}
+                          </SelectItem>
+                          <SelectItem value="3_years">
+                            {t("expires_3_years")}
+                          </SelectItem>
+                          <SelectItem value="never">
+                            {t("expires_never")}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -252,9 +242,9 @@ export function CreateApiKeyDialog({
                   control={form.control}
                   name="isActive"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="flex flex-row items-center justify-between">
                       <div className="space-y-0.5">
-                        <FormLabel className="text-base">
+                        <FormLabel>
                           {t("active_status")}
                         </FormLabel>
                         <FormDescription>
@@ -271,54 +261,55 @@ export function CreateApiKeyDialog({
                   )}
                 />
 
-                {/* Rate limit fields */}
-                <FormField
-                  control={form.control}
-                  name="rateLimit.requests"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("rate_limit_requests")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder={t("rate_limit_placeholder_example")}
-                          onChange={(e) =>
-                            field.onChange(Number(e.target.value))
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t("rate_limit_requests_description")}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="pt-2 border-t mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium">
+                      {t("advanced_settings")}
+                    </span>
+                    <Switch
+                      checked={showAdvanced}
+                      onCheckedChange={setShowAdvanced}
+                    />
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="rateLimit.window"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("rate_limit_window_seconds")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder={t("rate_limit_placeholder_example")}
-                          onChange={(e) =>
-                            field.onChange(Number(e.target.value))
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t("rate_limit_window_description")}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                  {showAdvanced && (
+                    <div className="space-y-4 pt-2">
+                      <FormField
+                        control={form.control}
+                        name="rateLimitPlan"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t("rate_limit_plan")}</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="standard">
+                                  {t("plan_standard")}
+                                </SelectItem>
+                                <SelectItem value="professional">
+                                  {t("plan_professional")}
+                                </SelectItem>
+                                <SelectItem value="enterprise">
+                                  {t("plan_enterprise")}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   )}
-                />
+                </div>
+
+
 
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={handleClose}>

@@ -1,6 +1,6 @@
 {
   "title": "API Keys Management",
-  "description": "Manage your API keys for secure access to the system",
+  "description": "",
   "search_placeholder": "Search API keys...",
   "create_api_key": "Create API Key",
   "created": "Created",
@@ -9,7 +9,13 @@
   "description_field": "Description",
   "description_placeholder": "Enter API key description",
   "expires_at": "Expires At",
-  "expires_at_placeholder": "Select expiration date",
+  "expires_at_placeholder": "Select expiration duration",
+  "expires_1_year": "1 Year",
+  "expires_1_5_years": "1.5 Years",
+  "expires_3_years": "3 Years",
+  "expires_never": "Never",
+  "advanced_settings": "Advanced Settings",
+  "rate_limit_plan": "Rate Limit Plan",
   "status": "Status",
   "key": "Key",
   "total": "Total",
@@ -75,9 +81,7 @@
   "copy_key_warning": "Warning: Do not share your API key with anyone. It is a secret credential.",
   "done": "Done",
   "key_copied": "API key copied to clipboard",
-  "rate_limit_requests": "Rate Limit Requests",
-  "rate_limit_requests_description": "Optional: requests allowed per window",
-  "rate_limit_window_seconds": "Rate Limit Window (seconds)",
-  "rate_limit_window_description": "Optional: time window in seconds",
-  "rate_limit_placeholder_example": "e.g., 60"
+  "plan_standard": "Standard (500 req/min)",
+  "plan_professional": "Professional (1000 req/min)",
+  "plan_enterprise": "Enterprise (3000 req/min)"
 }
