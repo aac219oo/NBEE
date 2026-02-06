@@ -1,4 +1,12 @@
 {
+  "userMenu": {
+    "dashboard": "Dashboard",
+    "accountSettings": "Account Settings",
+    "theme": "Theme",
+    "homePage": "Home Page",
+    "logOut": "Log out",
+    "developer": "Dev Center"
+  },
   "menu": {
     "title": "Menu",
     "loading": "Loading menus...",
@@ -125,7 +133,7 @@
     }
   },
   "developers": {
-    "title": "Developers",
+    "title": "Dev Center",
     "loading": "Loading developers...",
     "columns": {
       "name": "Name",

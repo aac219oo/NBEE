@@ -27,7 +27,7 @@ import {
   deleteApiKey,
   getApiKeysList,
 } from "../_server/api-keys.service";
-import { Edit, Eye, EyeOff, MoreHorizontal, Trash2 } from "lucide-react";
+import { Edit, MoreHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";

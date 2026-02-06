@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@heiso/core/components/ui/card";
+import { Checkbox } from "@heiso/core/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,8 @@ import { useCallback, useState, useTransition } from "react";
 import { type UseFormReturn, useForm } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "../ui/button";
+import { Separator } from "../ui/separator";
+import { useEffect } from "react";
 
 export interface Permission {
   id: string;
@@ -112,14 +115,14 @@ export function PermissionCard({
     [],
   );
 
-  // useEffect(() => {
-  //   setLocalPermissions(permissionGroup.permissions);
-  //   setIsAll(getOverallCheckboxState(permissionGroup.permissions));
-  // }, [permissionGroup.permissions, getOverallCheckboxState]);
+  useEffect(() => {
+    setLocalPermissions(permissionGroup.permissions);
+    setIsAll(_getOverallCheckboxState(permissionGroup.permissions));
+  }, [permissionGroup.permissions, _getOverallCheckboxState]);
 
-  // useEffect(() => {
-  //   setIsAll(getOverallCheckboxState(localPermissions));
-  // }, [localPermissions, getOverallCheckboxState]);
+  useEffect(() => {
+    setIsAll(_getOverallCheckboxState(localPermissions));
+  }, [localPermissions, _getOverallCheckboxState]);
 
   const form = useForm<PermissionFormValues>({
     resolver: zodResolver(permissionFormSchema),
@@ -280,26 +283,26 @@ export function PermissionCard({
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          {/* {localPermissions.length > 0 && (
+          {localPermissions.length > 0 && (
             <>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 mb-4 p-2 bg-muted/30 rounded-md">
                 <Checkbox
                   id={`select-all-${permissionGroup.id}`}
-                  checked={isAll}
+                  checked={_isAll}
                   onCheckedChange={(checked: boolean) =>
-                    handleToggleAll(checked)
+                    _handleToggleAll(checked)
                   }
                 />
                 <label
                   htmlFor={`select-all-${permissionGroup.id}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  className="text-sm font-semibold leading-none cursor-pointer"
                 >
                   Select All
                 </label>
               </div>
-              <Separator className="my-4" />
+              <Separator className="mb-4" />
             </>
-          )} */}
+          )}
           <div className="space-y-2">
             {permissionGroup.permissions.map((permission) => {
               const uiId = `${permission.resource}:${permission.action}:${permission.id}`;
@@ -309,15 +312,13 @@ export function PermissionCard({
                   className="flex min-h-6 items-center justify-between mb-0"
                 >
                   <div className="flex items-center space-x-2">
-                    {/* {(
-                      <Checkbox
-                        id={uiId}
-                        checked={permission?.checked}
-                        onCheckedChange={(isChecked) => {
-                          handlePermissionChange(isChecked, permission);
-                        }}
-                      />
-                    )} */}
+                    <Checkbox
+                      id={uiId}
+                      checked={permission?.checked}
+                      onCheckedChange={(isChecked) => {
+                        _handlePermissionChange(isChecked, permission);
+                      }}
+                    />
                     <label
                       htmlFor={uiId}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"

@@ -1,28 +1,11 @@
-import { SubNav } from "@heiso/core/components/primitives/sub-nav";
-
 export default function PermissionLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const subNavGroups = [
-    {
-      title: "PERMISSION",
-      items: [],
-    },
-  ];
-
   return (
-    <div className="flex w-full h-full">
-      <SubNav
-        rootPath={"/dev-center/permission"}
-        title="Permission"
-        groups={subNavGroups}
-        className="flex-none"
-      />
-      <div className="grow w-full h-full overflow-x-hidden overflow-y-auto">
-        {children}
-      </div>
+    <div className="w-full h-full bg-sub-background overflow-y-auto">
+      {children}
     </div>
   );
 }

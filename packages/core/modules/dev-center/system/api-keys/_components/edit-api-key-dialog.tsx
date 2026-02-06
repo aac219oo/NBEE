@@ -123,9 +123,7 @@ export function EditApiKeyDialog({
 
         const result = await updateApiKey(apiKey.id, {
           name: data.name,
-          description: null,
           expiresAt: expiresAtDate,
-          isActive: true,
           rateLimit,
         });
 

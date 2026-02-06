@@ -14,7 +14,7 @@ export async function verifyApiKey(key: string): Promise<{
   } | null;
 }> {
   const db = await getDynamicDb();
-  
+
   if (!key) {
     return { valid: false };
   }
@@ -27,13 +27,11 @@ export async function verifyApiKey(key: string): Promise<{
         id: true,
         userId: true,
         rateLimit: true,
-        isActive: true,
         expiresAt: true,
       },
       where: (t, { and, eq, isNull }) =>
         and(
           eq(t.key, hashedKey),
-          eq(apiKeys.isActive, true),
           isNull(t.deletedAt),
         ),
     });
