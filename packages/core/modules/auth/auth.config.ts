@@ -35,7 +35,7 @@ class InvalidLoginError extends CredentialsSignin {
   code = "Invalid identifier or password";
 }
 
-export const ALLOWED_DEV_EMAILS = ["pm@heiso.io", "dev@heiso.io", "james@heiso.io"];
+export const ALLOWED_DEV_EMAILS = ["pm@heiso.io", "dev@heiso.io"];
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
