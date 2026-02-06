@@ -8,6 +8,7 @@ import { auth } from "@heiso/core/modules/auth/auth.config";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getTenantId } from "@heiso/core/lib/utils/tenant";
+import { ensureTenantContext } from "@heiso/core/lib/db/rls";
 
 // Get API key prefix for display
 function getKeyPrefix(key: string): string {
@@ -20,6 +21,7 @@ type TApiKeyWithKeyPrefix = TPublicApiKey & { keyPrefix: string };
 export async function getApiKeysList(
   options: { search?: string; start?: number; limit?: number } = {},
 ) {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -98,6 +100,7 @@ export async function getApiKeysList(
 export async function getApiKey(
   id: string,
 ): Promise<TApiKeyWithKeyPrefix | null> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -170,6 +173,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
   apiKey?: TApiKeyWithKeyPrefix & { key: string };
   error?: string;
 }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -231,6 +235,7 @@ export async function updateApiKey(
   id: string,
   data: UpdateApiKeyInput,
 ): Promise<{ success: boolean; data?: TApiKeyWithKeyPrefix; error?: string }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -293,6 +298,7 @@ export async function updateApiKey(
 export async function deleteApiKey(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -335,6 +341,7 @@ export async function verifyApiKey(key: string): Promise<{
   userId?: string;
   apiKeyId?: string;
 }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   if (!key) {
     return { valid: false };
@@ -395,6 +402,7 @@ export async function verifyApiKey(key: string): Promise<{
 export async function toggleApiKeyStatus(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
