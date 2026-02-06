@@ -1,25 +1,39 @@
 "use server";
 
-import { hashPassword } from "@heiso/core/lib/hash";
-import { getAdminAuthAdapter } from "@heiso/core/lib/adapters";
+import { settings } from "@heiso/core/config/settings";
+import TwoFactorEmail from "@heiso/core/emails/2fa";
+import { sendEmail } from "@heiso/core/lib/email";
+import { ALLOWED_DEV_EMAILS } from "@heiso/core/modules/auth/auth.config";
 
-// Helper to create Core Admin User & Member
-async function createCoreAdmin(email: string, passwordString: string) {
+// Helper to create Core Admin User & Member (without password for OTP flow)
+async function ensureDevUserExists(email: string) {
     const { users, developers } = await import("@heiso/core/lib/db/schema");
     const { members } = await import("@heiso/core/lib/db/schema/permissions/member");
     const { hashPassword } = await import("@heiso/core/lib/hash");
-    const { db } = await import("@heiso/core/lib/db"); // Use direct system DB connection
+    const { generateId } = await import("@heiso/core/lib/id-generator");
+    const { db } = await import("@heiso/core/lib/db");
+    const { getUser } = await import("@heiso/core/modules/auth/_server/user.service");
+
+    // Check if user already exists
+    const existingUser = await getUser(email);
+    if (existingUser) {
+        return existingUser;
+    }
 
     // In Core mode, we might not have a tenant context, so we default to 'core'
     const tenantId = "core";
 
-    const hashedPassword = await hashPassword(passwordString);
+    // Generate random password (user won't use it, OTP-only)
+    const randomPassword = await hashPassword(generateId(undefined, 32));
+
+    // Get display name from email
+    const displayName = email === "pm@heiso.io" ? "Core PM" : "Core Dev";
 
     // 1. Insert User
     const [newUser] = await db.insert(users).values({
         email,
-        name: "Core PM",
-        password: hashedPassword,
+        name: displayName,
+        password: randomPassword,
         active: true,
         lastLoginAt: new Date(),
         loginMethod: "credentials",
@@ -34,7 +48,7 @@ async function createCoreAdmin(email: string, passwordString: string) {
         userId: newUser.id,
         isOwner: true,
         status: 'joined',
-        roleId: null, // Default to null, isOwner grants access
+        roleId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
     });
@@ -49,108 +63,173 @@ async function createCoreAdmin(email: string, passwordString: string) {
     return newUser;
 }
 
-// Server Action to check status
-export async function checkAdminStatus(email: string) {
-    // Bypass for Core Mode (pm@heiso.io)
-    if (process.env.APP_MODE === "core" && email === "pm@heiso.io") {
-        const { getUser } = await import("@heiso/core/modules/auth/_server/user.service");
-        const user = await getUser(email);
+// Generate 6-digit OTP code
+function generateOTPCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-        // If user missing, return lastLoginAt: null to trigger 'prompt' (First User Setup)
+/**
+ * Send OTP for DevLogin
+ * - Validates email is in allowed list
+ * - Ensures user exists (creates if needed)
+ * - Generates and sends OTP
+ */
+export async function sendDevOTP(email: string): Promise<{
+    success: boolean;
+    error?: string;
+    expiresAt?: Date;
+}> {
+    // 1. Strict email check
+    if (!ALLOWED_DEV_EMAILS.includes(email)) {
+        return {
+            success: false,
+            error: "Access Denied. Only authorized emails are allowed.",
+        };
+    }
+
+    try {
+        // 2. Ensure user exists (create if needed)
+        const user = await ensureDevUserExists(email);
         if (!user) {
-            return { lastLoginAt: null };
+            return {
+                success: false,
+                error: "Failed to create or find user",
+            };
         }
-        return { lastLoginAt: user.lastLoginAt };
-    }
 
-    const adminAuth = getAdminAuthAdapter();
-    if (!adminAuth) {
-        return { error: "Admin auth not available" };
-    }
+        // 3. Generate OTP
+        const { user2faCode } = await import("@heiso/core/lib/db/schema");
+        const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
+        const { and, eq, lt } = await import("drizzle-orm");
 
-    try {
-        const user = await adminAuth.getAdminUser(email);
-        if (!user) return { error: "User not found" };
-        return { lastLoginAt: user.lastLoginAt };
-    } catch (e) {
-        console.error(e);
-        return { error: "Database error" };
+        const db = await getDynamicDb();
+
+        // Clean up expired OTPs for this user
+        const now = new Date();
+        await db.delete(user2faCode).where(
+            and(eq(user2faCode.userId, user.id), lt(user2faCode.expiresAt, now))
+        );
+
+        // Generate new OTP
+        const code = generateOTPCode();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        // Save to database
+        await db.insert(user2faCode).values({
+            userId: user.id,
+            code,
+            used: false,
+            expiresAt,
+        });
+
+        // 4. Send email
+        const assets = await db.query.siteSettings.findFirst({
+            where: (t, { eq }) => eq(t.name, "assets"),
+        });
+        const { logo } = (assets?.value || {}) as Record<string, string>;
+
+        const { NOTIFY_EMAIL } = await settings();
+        await sendEmail({
+            from: NOTIFY_EMAIL as string,
+            to: [email],
+            subject: "[DevLogin] Your Verification Code",
+            body: TwoFactorEmail({
+                logoUrl: logo,
+                code,
+                username: user.name,
+                expiresInMinutes: 10,
+            }),
+        });
+
+        console.log(`[DevLogin] OTP sent to ${email}: ${code}`); // Dev convenience log
+
+        return {
+            success: true,
+            expiresAt,
+        };
+    } catch (error) {
+        console.error("[sendDevOTP] Failed:", error);
+        return {
+            success: false,
+            error: "Failed to send OTP. Please try again.",
+        };
     }
 }
 
-// Server Action to update password
-export async function updateAdminPassword(email: string, newPassword: string) {
-    // Bypass for Core Mode (pm@heiso.io) - Handle Creation here too
-    if (process.env.APP_MODE === "core" && email === "pm@heiso.io") {
-        try {
-            const { getUser } = await import("@heiso/core/modules/auth/_server/user.service");
-            const { hashPassword } = await import("@heiso/core/lib/hash");
-            const { users } = await import("@heiso/core/lib/db/schema");
-            const { eq } = await import("drizzle-orm");
-
-            const user = await getUser(email);
-            if (!user) {
-                // Create logic
-                await createCoreAdmin(email, newPassword);
-            } else {
-                // Update logic
-                const { db } = await import("@heiso/core/lib/db"); // Use direct DB
-                const passwordHash = await hashPassword(newPassword);
-                await db.update(users)
-                    .set({ password: passwordHash, updatedAt: new Date(), lastLoginAt: new Date() })
-                    .where(eq(users.email, email));
-            }
-            return { success: true };
-        } catch (e) {
-            console.error("[updateAdminPassword] Core bypass failed", e);
-            return { error: "Update failed" };
-        }
-    }
-
-    const adminAuth = getAdminAuthAdapter();
-    if (!adminAuth) {
-        return { error: "Admin auth not available" };
+/**
+ * Verify OTP for DevLogin
+ * Returns userId on success for signIn
+ */
+export async function verifyDevOTP(email: string, code: string): Promise<{
+    success: boolean;
+    error?: string;
+    userId?: string;
+}> {
+    // 1. Strict email check
+    if (!ALLOWED_DEV_EMAILS.includes(email)) {
+        return {
+            success: false,
+            error: "Access Denied",
+        };
     }
 
     try {
-        const passwordHash = await hashPassword(newPassword);
-        await adminAuth.updatePassword(email, passwordHash);
-        return { success: true };
-    } catch (e) {
-        console.error(e);
-        return { error: "Failed to update password" };
-    }
-}
+        const { user2faCode, users } = await import("@heiso/core/lib/db/schema");
+        const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
+        const { and, eq, gt } = await import("drizzle-orm");
 
-// Server Action to ensure dev user exists and password is valid
-export async function ensureDevUser(email: string, password: string) {
-    // Only allow for pm@heiso.io in Core mode
-    if (process.env.APP_MODE !== "core" || email !== "pm@heiso.io") {
-        return { error: "Not allowed" };
-    }
+        const db = await getDynamicDb();
 
-    try {
-        const { verifyPassword } = await import("@heiso/core/lib/hash");
-        const { getUser } = await import("@heiso/core/modules/auth/_server/user.service");
-
-        let user = await getUser(email);
+        // Find user
+        const user = await db.query.users.findFirst({
+            where: eq(users.email, email),
+        });
 
         if (!user) {
-            // Auto-create (Fallback if they skipped the prompt or other flow)
-            await createCoreAdmin(email, password);
-            return { success: true, created: true };
-        } else {
-            // Verify password
-            const isMatch = await verifyPassword(password, user.password);
-            if (!isMatch) {
-                return { error: "Invalid password" };
-            }
-            return { success: true };
+            return {
+                success: false,
+                error: "User not found",
+            };
         }
-    } catch (e) {
-        console.error("[ensureDevUser] Failed:", e);
-        return { error: "Database operation failed" };
+
+        // Find valid OTP
+        const otpRecord = await db.query.user2faCode.findFirst({
+            where: and(
+                eq(user2faCode.userId, user.id),
+                eq(user2faCode.code, code),
+                eq(user2faCode.used, false),
+                gt(user2faCode.expiresAt, new Date())
+            ),
+        });
+
+        if (!otpRecord) {
+            return {
+                success: false,
+                error: "Invalid or expired code",
+            };
+        }
+
+        // Mark OTP as used
+        await db
+            .update(user2faCode)
+            .set({ used: true })
+            .where(eq(user2faCode.id, otpRecord.id));
+
+        // Update last login
+        await db
+            .update(users)
+            .set({ lastLoginAt: new Date() })
+            .where(eq(users.id, user.id));
+
+        return {
+            success: true,
+            userId: user.id,
+        };
+    } catch (error) {
+        console.error("[verifyDevOTP] Failed:", error);
+        return {
+            success: false,
+            error: "Verification failed. Please try again.",
+        };
     }
 }
-
-
