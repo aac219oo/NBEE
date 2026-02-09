@@ -18,7 +18,7 @@ description: 標準化 Bug 修復流程 (Standard Bug Fix Workflow)
 ## 2. 修復策略 (Plan Fix)
 -   **最小影響原則**: 修復應針對 Root Cause，避免副作用 (Side Effects)。
 -   **Core Fix 注意事項**: 若修改 `core`，需思考是否會影響其他潛在使用該元件的 App。
--   **腳本生成規則**: 若需要生成debug用腳本程式請在 `../scripts` 這個目錄中生成。
+-   **腳本生成規則**: 若需要生成 debug 用腳本程式，請放置於專案根目錄 (`nbee`) 上一層的 `scripts` 目錄 (即 `../scripts`)，若無該目錄請直接創建該目錄。
 
 ## 3. 實作與驗證 (Implement & Verify)
 1.  **執行修復**。
@@ -26,10 +26,7 @@ description: 標準化 Bug 修復流程 (Standard Bug Fix Workflow)
     -   執行重現步驟，確認 Bug 已消失。
     -   檢查相關功能是否正常 (Regression Test)。
 3.  **執行檢查**:
-    ```bash
-    bun lint
-    bun run build  # 確保修復沒有破壞 Build
-    ```
+    -   參考 `skills/nbee-dev` 中的 `Unified Development Standards` 執行標準檢查 (`lint`, `build`)。
 
 ## 5. debug腳本規則 (Scripts rules)
 1.  **確認之後還是否需要重複使用腳本**。

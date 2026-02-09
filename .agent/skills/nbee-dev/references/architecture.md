@@ -63,3 +63,30 @@ To add a new application to the `apps/` directory:
 | CMS | `NBEE-Doc/CMS/` | ✅ Implemented |
 | Website | `NBEE-Doc/Website/` | 🔲 Pending |
 | AD | `NBEE-Doc/AD/` | 🔲 Pending |
+
+### Submodules & Private Packages
+
+When adding apps or packages that are private or shared but not part of the open monorepo:
+
+1.  **Use Submodules**: Add them as git submodules to keep the monorepo clean.
+    -   `git submodule add <private-repo-url> apps/<app-name>`
+    -   `git submodule add <private-repo-url> packages/<package-name>`
+    -   Always use the `ssh` URL (e.g., `git@github.com:heiso-io/...`) for private repos to support deploy keys.
+
+2.  **Configuration (GitHub MCP)**:
+    -   If available, use the `github` MCP to automate adding the submodule and configuring `.gitmodules`.
+    -   The MCP can help verify access and ensure the correct branch is tracked.
+
+3.  **Manual Configuration**:
+    -   Update `.gitmodules` to ensure the `path` and `url` are correct.
+    -   Example `.gitmodules`:
+        ```ini
+        [submodule "apps/private-app"]
+            path = apps/private-app
+            url = git@github.com:heiso-io/private-app.git
+        ```
+
+4.  **Syncing**:
+    -   Init: `git submodule update --init --recursive`
+    -   Update: `git submodule update --remote --merge`
+    -   Install: Run `bun install` after adding a submodule to link the workspace.
