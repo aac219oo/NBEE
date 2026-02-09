@@ -1,4 +1,12 @@
 {
+  "userMenu": {
+    "dashboard": "儀表板",
+    "accountSettings": "帳戶設定",
+    "theme": "主題",
+    "homePage": "首頁",
+    "logOut": "登出",
+    "developer": "開發中心"
+  },
   "menu": {
     "title": "選單",
     "loading": "正在加載選單...",
@@ -125,7 +133,7 @@
     }
   },
   "developers": {
-    "title": "開發者",
+    "title": "開發中心",
     "loading": "正在加載開發者列表...",
     "columns": {
       "name": "姓名",

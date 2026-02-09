@@ -30,8 +30,6 @@ export const apiKeys = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     key: varchar("key", { length: 255 }).notNull().unique(),
     rateLimit: json("rate_limit").default({ requests: 100, window: 60 }),
-    description: text("description"),
-    isActive: boolean("is_active").default(true).notNull(),
     lastUsedAt: timestamp("last_used_at"),
     expiresAt: timestamp("expires_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -134,10 +132,6 @@ export const insertApiKeySchema = createInsertSchema(apiKeys, {
     .string()
     .min(1, "Name is required")
     .max(100, "Name must be less than 100 characters"),
-  description: z
-    .string()
-    .max(500, "Description must be less than 500 characters")
-    .optional(),
   expiresAt: z.date().optional(),
 });
 
@@ -153,7 +147,7 @@ export type TCreateApiKey = Omit<
   "id" | "userId" | "key" | "createdAt" | "updatedAt" | "deletedAt"
 >;
 export type TUpdateApiKey = Partial<
-  Pick<TApiKey, "name" | "description" | "isActive" | "expiresAt">
+  Pick<TApiKey, "name" | "expiresAt">
 >;
 
 // Public API Key type (without sensitive key field)

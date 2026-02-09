@@ -24,7 +24,7 @@
     "./globals.css": "./app/globals.css"
   },
   "scripts": {
-    "dev": "bun run:permission && bun x next dev",
+    "dev": "bun run:permission && bun x next dev --turbo",
     "build": "bun x next build",
     "start": "bun x next start",
     "db": "bun drizzle-kit generate",

@@ -23,11 +23,14 @@ import {
   TableRow,
 } from "@heiso/core/components/ui/table";
 import type { TPublicApiKey } from "@heiso/core/lib/db/schema";
-import { Edit, Eye, EyeOff, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  deleteApiKey,
+  getApiKeysList,
+} from "../_server/api-keys.service";
+import { Edit, MoreHorizontal, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { deleteApiKey, toggleApiKeyStatus } from "../_server/api-keys.service";
 import { EditApiKeyDialog } from "./edit-api-key-dialog";
 
 export interface TApiKeyWithKeyPrefix extends TPublicApiKey {
@@ -55,26 +58,6 @@ export function ApiKeysList({
     setApiKeys(initialApiKeys);
     setTotal(initialTotal);
   }, [initialApiKeys, initialTotal]);
-
-  const handleToggleStatus = (apiKey: TApiKeyWithKeyPrefix) => {
-    startTransition(async () => {
-      try {
-        const result = await toggleApiKeyStatus(apiKey.id);
-        if (result.success) {
-          setApiKeys((prev) =>
-            prev.map((key) =>
-              key.id === apiKey.id ? { ...key, isActive: !key.isActive } : key,
-            ),
-          );
-          toast.success(t("toggle_success"));
-        } else {
-          toast.error(result.error || t("toggle_error"));
-        }
-      } catch (_error) {
-        toast.error(t("toggle_error"));
-      }
-    });
-  };
 
   const handleDelete = (apiKey: TApiKeyWithKeyPrefix) => {
     if (!confirm(t("delete_confirm"))) return;
@@ -145,7 +128,6 @@ export function ApiKeysList({
               <TableRow>
                 <TableHead>{t("name")}</TableHead>
                 <TableHead>{t("key")}</TableHead>
-                <TableHead>{t("status")}</TableHead>
                 <TableHead>{t("last_used")}</TableHead>
                 <TableHead>{t("expires_at")}</TableHead>
                 <TableHead>{t("created_at")}</TableHead>
@@ -156,40 +138,25 @@ export function ApiKeysList({
               {apiKeys.map((apiKey) => (
                 <TableRow key={apiKey.id}>
                   <TableCell>
-                    <div>
-                      <div className="font-medium">{apiKey.name}</div>
-                      {apiKey.description && (
-                        <div className="text-sm text-gray-500">
-                          {apiKey.description}
-                        </div>
-                      )}
-                    </div>
+                    <div className="font-medium">{apiKey.name}</div>
                   </TableCell>
                   <TableCell>
                     <code className="text-xs bg-gray-100 px-2 py-1 rounded">
                       {apiKey.keyPrefix}
                     </code>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Badge
-                        variant={apiKey.isActive ? "default" : "secondary"}
-                        className={
-                          apiKey.isActive ? "bg-green-100 text-green-800" : ""
-                        }
-                      >
-                        {apiKey.isActive ? t("active") : t("inactive")}
-                      </Badge>
-                      {isExpired(apiKey.expiresAt) && (
-                        <Badge variant="destructive">{t("expired")}</Badge>
-                      )}
-                    </div>
-                  </TableCell>
                   <TableCell className="text-sm text-gray-500">
                     {formatDate(apiKey.lastUsedAt)}
                   </TableCell>
                   <TableCell className="text-sm text-gray-500">
-                    {formatDate(apiKey.expiresAt)}
+                    <div className="flex items-center space-x-2">
+                      <span>{formatDate(apiKey.expiresAt)}</span>
+                      {isExpired(apiKey.expiresAt) && (
+                        <Badge variant="destructive" className="h-5 px-1.5 text-[10px]">
+                          {t("expired")}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm text-gray-500">
                     {formatDate(apiKey.createdAt)}
@@ -207,21 +174,6 @@ export function ApiKeysList({
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           {t("edit")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleToggleStatus(apiKey)}
-                        >
-                          {apiKey.isActive ? (
-                            <>
-                              <EyeOff className="h-4 w-4 mr-2" />
-                              {t("deactivate")}
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="h-4 w-4 mr-2" />
-                              {t("activate")}
-                            </>
-                          )}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleDelete(apiKey)}

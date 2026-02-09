@@ -1,6 +1,6 @@
 {
   "title": "API 金鑰管理",
-  "description": "管理您的 API 金鑰以安全存取系統",
+  "description": "",
   "search_placeholder": "搜尋 API 金鑰...",
   "create_api_key": "建立 API 金鑰",
   "created": "建立時間",
@@ -9,7 +9,14 @@
   "description_field": "描述",
   "description_placeholder": "輸入 API 金鑰描述",
   "expires_at": "到期時間",
-  "expires_at_placeholder": "選擇到期日期",
+  "expires_at_placeholder": "選擇到期時間",
+  "expires_1_year": "1 年",
+  "expires_1_5_years": "1.5 年",
+  "expires_3_years": "3 年",
+  "expires_never": "永不過期",
+  "advanced_settings": "進階設定",
+  "rate_limit_plan": "流量限制方案",
+  "api_key": "API 金鑰",
   "status": "狀態",
   "key": "金鑰",
   "total": "總共",
@@ -75,9 +82,7 @@
   "copy_key_warning": "警告：不要將您的 API 金鑰分享給任何人。它是一個秘密憑證。",
   "done": "完成",
   "key_copied": "API 金鑰已複製",
-  "rate_limit_requests": "速率限制請求數",
-  "rate_limit_requests_description": "選填：每個窗口允許的請求數",
-  "rate_limit_window_seconds": "速率限制窗口（秒）",
-  "rate_limit_window_description": "選填：時間窗口（秒）",
-  "rate_limit_placeholder_example": "例如：60"
+  "plan_standard": "標準方案 (每分鐘 500 次)",
+  "plan_professional": "專業方案 (每分鐘 1000 次)",
+  "plan_enterprise": "旗艦方案 (每分鐘 3000 次)"
 }

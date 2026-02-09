@@ -2,8 +2,8 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
-import { CMS_DEFAULT_MENUS, CORE_DEFAULT_MENUS, DEFAULT_ROLES } from '@heiso/core/config/initDefaults';
-import { menus, navigations, apiKeys } from "@heiso/core/lib/db/schema";
+import { DEFAULT_ROLES } from '@heiso/core/config/initDefaults';
+import { navigations } from "@heiso/core/lib/db/schema";
 import { generateNavigationId } from "@heiso/core/lib/id-generator";
 import { generateApiKey, hashApiKey } from "@heiso/core/lib/hash";
 import { eq } from "drizzle-orm";
@@ -79,56 +79,10 @@ export async function provisionTenantDb(dbUrl: string, modules: string[], tenant
 }
 
 export async function seedDefaults(db: any, modules: string[], tenantId: string) {
-    // 1. Seed 'menus' (Dashboard RBAC Menus)
-    console.log('[Provisioning] Checking "menus" seeding for tenant:', tenantId);
-    await db.transaction(async (tx: any) => {
-        let orderCounter = 1000;
-        const { and, eq } = await import("drizzle-orm"); // Ensure operators available
+    // Note: Menu seeding has been removed. Menus are now defined statically in dashboard-config.ts
+    // and no longer need to be seeded into the database.
 
-        const isCoreMode = process.env.APP_MODE === "core";
-        const keysToSeed = isCoreMode ? Object.keys(CORE_DEFAULT_MENUS) : modules;
-        const menuSource = isCoreMode ? CORE_DEFAULT_MENUS : CMS_DEFAULT_MENUS;
-
-        for (const mod of keysToSeed) {
-            // @ts-ignore
-            const modMenus = menuSource[mod as keyof typeof menuSource];
-            if (modMenus) {
-                for (const group of modMenus) {
-                    const groupName = group.group;
-                    if (group.items && group.items.length > 0) {
-                        for (const item of group.items) {
-                            const title = item.meta?.title || item.name;
-                            const path = item.meta?.url || '#';
-
-                            // Check if this specific menu exists
-                            const existing = await tx.select({ id: menus.id })
-                                .from(menus)
-                                .where(and(
-                                    eq(menus.tenantId, tenantId),
-                                    eq(menus.path, path),
-                                    eq(menus.title, title)
-                                )) // Composite check
-                                .limit(1);
-
-                            if (existing.length === 0) {
-                                await tx.insert(menus).values({
-                                    tenantId: tenantId,
-                                    title,
-                                    path,
-                                    icon: item.meta?.icon,
-                                    group: groupName,
-                                    order: orderCounter++,
-                                    updatedAt: new Date(),
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // 2. Seed 'roles'
+    // 1. Seed 'roles'
     if (modules.includes('role') || process.env.APP_MODE === "core") {
 
         const { roles } = await import('@heiso/core/lib/db/schema');

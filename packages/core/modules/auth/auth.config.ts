@@ -35,6 +35,8 @@ class InvalidLoginError extends CredentialsSignin {
   code = "Invalid identifier or password";
 }
 
+export const ALLOWED_DEV_EMAILS = ["pm@heiso.io", "dev@heiso.io"];
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: "/login",
@@ -140,7 +142,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.member = {
           status: 'joined',
           isOwner: true,
-          roleName: 'Internal Admin',
+          roleName: 'Admin',
           fullAccess: true,
         };
         return session;
@@ -328,11 +330,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const { getUser } = await import("./_server/user.service");
           const user = await getUser(email);
           if (!user || user.id !== userId) throw new InvalidLoginError();
+
+          // DevLogin OTP: Grant admin permissions for allowed emails
+          const isDevLogin = credentials?.isDevLogin === "true";
+          const isAllowedDevEmail = ALLOWED_DEV_EMAILS.includes(email);
+
           return {
             id: user.id,
             name: user.name,
             email: user.email,
-            isDeveloper: !!user?.developer,
+            isDeveloper: (isDevLogin && isAllowedDevEmail) ? true : !!user?.developer,
+            isAdminUser: (isDevLogin && isAllowedDevEmail) ? true : undefined,
           };
         }
 
@@ -351,7 +359,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const isRefDevLogin = (credentials as any)?.isDevLogin === "true";
             const isCoreAdminBypass =
               process.env.APP_MODE === "core" &&
-              username === "pm@heiso.io" &&
+              ALLOWED_DEV_EMAILS.includes(username) &&
               isRefDevLogin;
 
             return {

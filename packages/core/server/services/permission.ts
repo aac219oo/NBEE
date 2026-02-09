@@ -10,15 +10,18 @@ export async function getUserPermissions() {
   const userId = session?.user?.id;
   if (!userId) throw new Error("Unauthorized");
 
-  const cached = permissionCache.get(userId);
-  if (cached) return cached;
+  // [MOVED UP] Check Admin FIRST - DevLogin users should always get Admin role
   if ((session.user as any).isAdminUser) {
     return {
-      role: 'Internal Admin',
+      role: 'Admin',
       fullAccess: true,
       permissions: [],
     };
   }
+
+  const cached = permissionCache.get(userId);
+  if (cached) return cached;
+
   const permissions = await roleService.findUserPermissions(userId);
   permissionCache.set(userId, permissions);
   return permissions;

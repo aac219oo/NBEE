@@ -1,10 +1,10 @@
 "use server";
 
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import type { TMenu, TPermission } from "@heiso/core/lib/db/schema";
-import { menus, roleMenus } from "@heiso/core/lib/db/schema";
+import type { TPermission } from "@heiso/core/lib/db/schema";
+import { roleMenus } from "@heiso/core/lib/db/schema";
 import { auth } from "@heiso/core/modules/auth/auth.config";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getTenantId } from "@heiso/core/lib/utils/tenant";
 
 // Types
@@ -81,12 +81,31 @@ async function getMyMembership() {
   });
 }
 
-async function getMyMenus({
+/**
+ * Returns allowed menu IDs for the current user.
+ * - If fullAccess is true, returns null (indicating all menus are allowed)
+ * - Otherwise, returns an array of menu IDs from role_menus table
+ *
+ * Note: The actual menu definitions are now in dashboard-config.ts (static config).
+ * This function only handles permission filtering.
+ */
+async function getMyAllowedMenuIds({
   fullAccess,
   roleId,
-}: AccessParams): Promise<TMenu[]> {
+}: AccessParams): Promise<string[] | null> {
+  // Full access means all menus are allowed
+  if (fullAccess) {
+    console.log("[DEBUG] getMyAllowedMenuIds: fullAccess granted");
+    return null;
+  }
+
+  if (!roleId) {
+    console.log("[DEBUG] getMyAllowedMenuIds: no roleId, returning empty");
+    return [];
+  }
+
   const tenantId = await getTenantId();
-  console.log("[DEBUG] getMyMenus tenantId:", tenantId, "fullAccess:", fullAccess, "roleId:", roleId);
+  console.log("[DEBUG] getMyAllowedMenuIds tenantId:", tenantId, "roleId:", roleId);
 
   if (!tenantId) return [];
 
@@ -95,30 +114,17 @@ async function getMyMenus({
   return await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`);
 
-    if (fullAccess) {
-      const found = await tx.query.menus.findMany({
-        where: (t, { and, or, eq, isNull }) =>
-          and(isNull(t.parentId), isNull(t.deletedAt), eq(t.tenantId, tenantId)), // Explicit filter too
-        orderBy: (t, { asc }) => [asc(t.order)],
-      });
-      console.log("[DEBUG] getMyMenus (fullAccess) found count:", found.length);
-      return found;
-    }
-
-    if (!roleId) return [];
-
+    // Query role_menus to get allowed menu IDs
     const roleMenusData = await tx
       .select({
-        menu: menus,
+        menuId: roleMenus.menuId,
       })
       .from(roleMenus)
-      .leftJoin(menus, eq(roleMenus.menuId, menus.id))
-      .where(and(eq(roleMenus.roleId, roleId), isNull(menus.deletedAt))) // RLS handles tenant
-      .orderBy(asc(menus.order));
+      .where(eq(roleMenus.roleId, roleId));
 
-    const final = roleMenusData.map((item) => item.menu).filter((i) => i !== null) as TMenu[];
-    console.log("[DEBUG] getMyMenus (role) found count:", final.length);
-    return final;
+    const menuIds = roleMenusData.map((item) => item.menuId);
+    console.log("[DEBUG] getMyAllowedMenuIds found:", menuIds);
+    return menuIds;
   });
 }
 
@@ -156,4 +162,4 @@ async function getMyOrgPermissions({
   return rolePermissionsResult.map((item) => item.permission).filter(Boolean);
 }
 
-export { getUser, getMyMembership, getMyMenus, getMyOrgPermissions };
+export { getUser, getMyMembership, getMyAllowedMenuIds, getMyOrgPermissions };

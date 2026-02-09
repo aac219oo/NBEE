@@ -23,29 +23,30 @@ async function getGeneralSettings(): Promise<Settings> {
 // 寫入 general_settings（以 name 為 key upsert）
 async function saveGeneralSetting(data: Settings) {
   const db = await getDynamicDb();
+  const tenantId = await getTenantId();
+
+  if (!tenantId) {
+    throw new Error("Tenant ID is required for saving general settings");
+  }
 
   // Check for domain update
   const basicSettings = (data as any)?.basic;
   if (basicSettings?.domain !== undefined) {
-    const tenantId = await getTenantId();
-
-    if (tenantId) {
-      try {
-        const { getTenantAdapter } = await import("@heiso/core/lib/adapters");
-        const tenantAdapter = getTenantAdapter();
-        if (tenantAdapter) {
-          await tenantAdapter.updateTenant(tenantId, {
-            customDomain: basicSettings.domain || null,
-          });
-        } else {
-          console.warn("[saveGeneralSetting] TenantAdapter not registered, skipping remote update");
-        }
-      } catch (error) {
-        console.error("Failed to update tenant custom domain", error);
-        // We might want to throw here to prevent saving local settings if remote fails
-        // Or just log it. For now, let's throw to notify user via UI error if possible.
-        throw new Error("Failed to update custom domain");
+    try {
+      const { getTenantAdapter } = await import("@heiso/core/lib/adapters");
+      const tenantAdapter = getTenantAdapter();
+      if (tenantAdapter) {
+        await tenantAdapter.updateTenant(tenantId, {
+          customDomain: basicSettings.domain || null,
+        });
+      } else {
+        console.warn("[saveGeneralSetting] TenantAdapter not registered, skipping remote update");
       }
+    } catch (error) {
+      console.error("Failed to update tenant custom domain", error);
+      // We might want to throw here to prevent saving local settings if remote fails
+      // Or just log it. For now, let's throw to notify user via UI error if possible.
+      throw new Error("Failed to update custom domain");
     }
   }
 
@@ -57,6 +58,7 @@ async function saveGeneralSetting(data: Settings) {
         await tx
           .insert(generalSettings)
           .values({
+            tenantId,
             name: key,
             value,
           })
@@ -74,16 +76,22 @@ async function saveGeneralSetting(data: Settings) {
 // 快捷：更新系統預設語言到 general_settings
 async function saveDefaultLanguage(locale: Locale) {
   const db = await getDynamicDb();
+  const tenantId = await getTenantId();
+
+  if (!tenantId) {
+    throw new Error("Tenant ID is required for saving default language");
+  }
+
   await db
     .insert(generalSettings)
     .values({
+      tenantId,
       name: "language",
       value: { default: locale },
     })
     .onConflictDoUpdate({
-      target: generalSettings.name,
+      target: [generalSettings.tenantId, generalSettings.name],
       set: {
-        name: "language",
         value: { default: locale },
       },
     });

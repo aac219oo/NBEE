@@ -30,7 +30,7 @@ export async function GET() {
           isOwner: true,
           role: {
             id: 'admin',
-            name: 'Internal Admin',
+            name: 'Admin',
             fullAccess: true,
           }
         }

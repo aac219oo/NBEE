@@ -3,6 +3,8 @@ import type { UserAvatarMenuItem } from "@heiso/core/components/primitives/user-
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import type { Navigation } from "@heiso/core/types/client";
 import { getTranslations } from "next-intl/server";
+import { getMyMembership } from "../dashboard/(dashboard)/_server/membership.service";
+import { PermissionProvider } from "@heiso/core/providers/permission";
 
 export default async function DashboardLayout({
   children,
@@ -12,6 +14,7 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session?.user) return null;
 
+  const membership = await getMyMembership();
   const t = await getTranslations("account.layout");
 
   const navigation: Navigation = {
@@ -77,20 +80,31 @@ export default async function DashboardLayout({
     },
   ] satisfies UserAvatarMenuItem[];
 
+  if (membership.isDeveloper) {
+    userAvatarMenu[0].group?.push({
+      id: "dev-center",
+      text: t("userMenu.developer"),
+      href: "/dev-center",
+      type: "Link",
+    });
+  }
+
   return (
-    <Layout
-      breadcrumb={{
-        items: [
-          {
-            title: t("breadcrumb.account"),
-            link: "/account",
-          },
-        ],
-      }}
-      navigation={navigation}
-      menu={userAvatarMenu}
-    >
-      {children}
-    </Layout>
+    <PermissionProvider>
+      <Layout
+        breadcrumb={{
+          items: [
+            {
+              title: t("breadcrumb.account"),
+              link: "/account",
+            },
+          ],
+        }}
+        navigation={navigation}
+        menu={userAvatarMenu}
+      >
+        {children}
+      </Layout>
+    </PermissionProvider>
   );
 }

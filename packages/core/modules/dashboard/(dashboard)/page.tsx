@@ -4,9 +4,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getMyMembership,
-  getMyMenus,
+  getMyAllowedMenuIds,
   getUser,
 } from "./_server/membership.service";
+import { buildDashboardNavigation } from "./dashboard-config";
 
 export default async function DashboardPage() {
   const headerList = await headers();
@@ -26,17 +27,23 @@ export default async function DashboardPage() {
     membership.isOwner === true ||
     membership.role?.fullAccess === true;
 
-  const menu = await getMyMenus({
+  // Get allowed menu IDs and build navigation from static config
+  const allowedMenuIds = await getMyAllowedMenuIds({
     fullAccess: hasFullAccess,
     roleId: membership?.roleId,
   });
 
+  const navigation = buildDashboardNavigation(allowedMenuIds);
+
+  // Get first menu item for redirect
+  const firstItem = navigation.items[0];
+  const firstPath = Array.isArray(firstItem) ? firstItem[0]?.path : firstItem?.path;
+
   if (
     (pathname === "/dashboard" || pathname === "/dashboard/") &&
-    menu?.length &&
-    menu[0].path
+    firstPath
   ) {
-    return <ClientRedirect url={`/dashboard${menu[0].path}`} />;
+    return <ClientRedirect url={`/dashboard${firstPath}`} />;
   }
 
   return null;

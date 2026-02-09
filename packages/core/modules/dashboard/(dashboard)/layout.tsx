@@ -1,19 +1,20 @@
 import { Layout } from "@heiso/core/components/primitives/layout";
 import type { UserAvatarMenuItem } from "@heiso/core/components/primitives/user-avatar";
 import { LayoutSkeleton } from "@heiso/core/components/skeleton";
-import { findMenus, groupMenuItems } from "@heiso/core/lib/tree";
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { PermissionProvider } from "@heiso/core/providers/permission";
-import type { Navigation } from "@heiso/core/types/client";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
-import { getMyMembership, getMyMenus } from "./_server/membership.service";
+import { getMyMembership, getMyAllowedMenuIds } from "./_server/membership.service";
+import { buildDashboardNavigation } from "./dashboard-config";
+import { DASHBOARD_DEFAULT_MENUS } from "@heiso/core/config/menus";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
+  menus?: typeof DASHBOARD_DEFAULT_MENUS;
 }
 
-export default async function OrgLayout({ children }: OrgLayoutProps) {
+export default async function OrgLayout({ children, menus }: OrgLayoutProps) {
   // Authentication check
   const session = await auth();
   if (!session?.user) return null;
@@ -21,12 +22,18 @@ export default async function OrgLayout({ children }: OrgLayoutProps) {
   // Get organization data
   return (
     <Suspense fallback={<LayoutSkeleton />}>
-      <OrgLayoutWrap>{children}</OrgLayoutWrap>
+      <OrgLayoutWrap menus={menus}>{children}</OrgLayoutWrap>
     </Suspense>
   );
 }
 
-async function OrgLayoutWrap({ children }: { children: React.ReactNode }) {
+async function OrgLayoutWrap({
+  children,
+  menus
+}: {
+  children: React.ReactNode;
+  menus?: typeof DASHBOARD_DEFAULT_MENUS;
+}) {
   // Get user membership and permissions
   const membership = await getMyMembership();
 
@@ -60,31 +67,21 @@ async function OrgLayoutWrap({ children }: { children: React.ReactNode }) {
   const t = await getTranslations("dashboard.userMenu");
   const tn = await getTranslations("dashboard.nav");
 
-  // Build navigation menu
-  const menu = await getMyMenus({
+  // Build navigation menu from static config
+  const allowedMenuIds = await getMyAllowedMenuIds({
     fullAccess: hasFullAccess,
     roleId: membership?.roleId,
   });
 
-  console.log("menu: ", menu);
+  console.log("allowedMenuIds: ", allowedMenuIds);
 
-  const navigation: Navigation = {
-    rootPath: `/dashboard`,
-    items: groupMenuItems(findMenus(menu, null, { level: 1 })),
-  };
-
-  navigation.items = navigation.items.map((item) => {
-    if (Array.isArray(item)) {
-      return item.map((subItem) => ({
-        ...subItem,
-        title: subItem.title ? tn(subItem.title) : subItem.title,
-      }));
-    }
-    return {
-      ...item,
-      title: item.title ? tn(item.title) : item.title,
-    };
-  });
+  // Build navigation from static config, filtered by allowed IDs
+  // Pass translation function for i18n support and optional custom menus
+  const navigation = buildDashboardNavigation(
+    allowedMenuIds,
+    (key) => tn(key),
+    menus
+  );
 
   const userAvatarMenu = [
     {

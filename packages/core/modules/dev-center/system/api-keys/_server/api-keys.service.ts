@@ -8,6 +8,7 @@ import { auth } from "@heiso/core/modules/auth/auth.config";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getTenantId } from "@heiso/core/lib/utils/tenant";
+import { ensureTenantContext } from "@heiso/core/lib/db/rls";
 
 // Get API key prefix for display
 function getKeyPrefix(key: string): string {
@@ -20,6 +21,7 @@ type TApiKeyWithKeyPrefix = TPublicApiKey & { keyPrefix: string };
 export async function getApiKeysList(
   options: { search?: string; start?: number; limit?: number } = {},
 ) {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -61,10 +63,8 @@ export async function getApiKeysList(
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        description: apiKeys.description,
         keyPrefix: apiKeys.key, // We'll transform this to show only prefix
         rateLimit: apiKeys.rateLimit,
-        isActive: apiKeys.isActive,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
         createdAt: apiKeys.createdAt,
@@ -98,6 +98,7 @@ export async function getApiKeysList(
 export async function getApiKey(
   id: string,
 ): Promise<TApiKeyWithKeyPrefix | null> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -120,10 +121,8 @@ export async function getApiKey(
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        description: apiKeys.description,
         keyPrefix: apiKeys.key,
         rateLimit: apiKeys.rateLimit,
-        isActive: apiKeys.isActive,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
         createdAt: apiKeys.createdAt,
@@ -170,6 +169,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
   apiKey?: TApiKeyWithKeyPrefix & { key: string };
   error?: string;
 }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -190,10 +190,8 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
         userId: session.user.id,
         tenantId,
         name: data.name,
-        description: data.description,
         key: hashedKey,
         rateLimit: data.rateLimit,
-        isActive: data.isActive ?? true,
         expiresAt: data.expiresAt,
       })
       .returning({
@@ -201,9 +199,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        description: apiKeys.description,
         rateLimit: apiKeys.rateLimit,
-        isActive: apiKeys.isActive,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
         createdAt: apiKeys.createdAt,
@@ -231,6 +227,7 @@ export async function updateApiKey(
   id: string,
   data: UpdateApiKeyInput,
 ): Promise<{ success: boolean; data?: TApiKeyWithKeyPrefix; error?: string }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -250,8 +247,6 @@ export async function updateApiKey(
       .update(apiKeys)
       .set({
         name: data.name,
-        description: data.description,
-        isActive: data.isActive,
         expiresAt: data.expiresAt,
         rateLimit: data.rateLimit,
         updatedAt: new Date(),
@@ -262,10 +257,8 @@ export async function updateApiKey(
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        description: apiKeys.description,
         keyPrefix: apiKeys.key,
         rateLimit: apiKeys.rateLimit,
-        isActive: apiKeys.isActive,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
         createdAt: apiKeys.createdAt,
@@ -293,6 +286,7 @@ export async function updateApiKey(
 export async function deleteApiKey(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
@@ -335,6 +329,7 @@ export async function verifyApiKey(key: string): Promise<{
   userId?: string;
   apiKeyId?: string;
 }> {
+  await ensureTenantContext();
   const db = await getDynamicDb();
   if (!key) {
     return { valid: false };
@@ -347,7 +342,6 @@ export async function verifyApiKey(key: string): Promise<{
 
     const filters = [
       eq(apiKeys.key, hashedKey),
-      eq(apiKeys.isActive, true),
       isNull(apiKeys.deletedAt),
     ];
     if (tenantId) filters.push(eq(apiKeys.tenantId, tenantId));
@@ -356,7 +350,6 @@ export async function verifyApiKey(key: string): Promise<{
       .select({
         id: apiKeys.id,
         userId: apiKeys.userId,
-        isActive: apiKeys.isActive,
         expiresAt: apiKeys.expiresAt,
       })
       .from(apiKeys)
@@ -388,52 +381,5 @@ export async function verifyApiKey(key: string): Promise<{
   } catch (error) {
     console.error("Error verifying API key:", error);
     return { valid: false };
-  }
-}
-
-// Toggle API key status
-export async function toggleApiKeyStatus(
-  id: string,
-): Promise<{ success: boolean; error?: string }> {
-  const db = await getDynamicDb();
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "Unauthorized" };
-  }
-  const tenantId = await getTenantId();
-
-  try {
-    const filters = [
-      eq(apiKeys.id, id),
-      eq(apiKeys.userId, session.user.id),
-      isNull(apiKeys.deletedAt),
-    ];
-    if (tenantId) filters.push(eq(apiKeys.tenantId, tenantId));
-
-    // First get current status
-    const [currentApiKey] = await db
-      .select({ isActive: apiKeys.isActive })
-      .from(apiKeys)
-      .where(and(...filters))
-      .limit(1);
-
-    if (!currentApiKey) {
-      return { success: false, error: "API key not found" };
-    }
-
-    // Toggle status
-    await db
-      .update(apiKeys)
-      .set({
-        isActive: !currentApiKey.isActive,
-        updatedAt: new Date(),
-      })
-      .where(and(...filters));
-
-    revalidatePath("/dashboard/settings/api-keys", "page");
-    return { success: true };
-  } catch (error) {
-    console.error("Error toggling API key status:", error);
-    return { success: false, error: "Failed to toggle API key status" };
   }
 }

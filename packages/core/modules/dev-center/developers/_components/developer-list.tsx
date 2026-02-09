@@ -1,5 +1,7 @@
 "use client";
 
+import { Avatar } from "@heiso/core/components/primitives/avatar";
+import { CaptionTotal } from "@heiso/core/components/shared/caption-total";
 import { ActionButton } from "@heiso/core/components/primitives/action-button";
 import { Badge } from "@heiso/core/components/ui/badge";
 import {
@@ -26,6 +28,7 @@ import {
   FormMessage,
 } from "@heiso/core/components/ui/form";
 import { Input } from "@heiso/core/components/ui/input";
+import { SearchInput } from "@heiso/core/components/ui/search-input";
 import {
   Table,
   TableBody,
@@ -43,7 +46,7 @@ import {
   getFilteredRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
@@ -74,41 +77,17 @@ export function DeveloperList({ data }: { data: Developer[] }) {
   const columns: ColumnDef<Developer>[] = [
     {
       header: t("columns.name"),
+      accessorFn: (row) => `${row.user.name} ${row.user.email}`,
       cell: ({ row }) => {
-        const { id, name } = row.original.user;
-        const isYou = session?.user?.id === id;
-        return (
-          <div className="flex items-center justify-between gap-3 min-h-[35px]">
-            <div className="flex gap-2">
-              <span>{name}</span>
-              {isYou && (
-                <Badge variant={"outline"} className="text-xs">
-                  {t("columns.youBadge")}
-                </Badge>
-              )}
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      header: t("columns.email"),
-      cell: ({ row }) => {
-        const { email } = row.original.user;
-        return (
-          <div className="flex items-center justify-between gap-3 min-h-[35px]">
-            <div className="flex flex-col">
-              <span>{email}</span>
-            </div>
-          </div>
-        );
+        const isYou = session?.user?.id === row.original.user.id;
+        return <DeveloperUser developer={row.original} isYou={isYou} />;
       },
     },
     {
       id: "actions",
       cell: ({ row }) => {
         return (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <ActionButton
@@ -177,118 +156,143 @@ export function DeveloperList({ data }: { data: Developer[] }) {
     });
   };
 
+  const totalRows = table.getFilteredRowModel().rows.length;
+
   return (
-    <div className="container mx-auto max-w-6xl justify-start py-10 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Input
-            type="text"
-            placeholder={t("search.inputPlaceholder")}
-            className="h-9 w-[240px]"
+    <div className="container mx-auto pt-4 pr-4 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <CaptionTotal title={t("title")} total={totalRows} />
+        <div className="flex gap-2">
+          <SearchInput
             value={filtering}
             onChange={(e) => setFiltering(e.target.value)}
+            placeholder={t("search.inputPlaceholder")}
           />
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <ActionButton
-              variant="default"
-              disabled={isPending}
-              loading={isPending}
-            >
-              {t("add.buttonLabel")}
-            </ActionButton>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("add.dialogTitle")}</DialogTitle>
-              <DialogDescription>
-                {t("add.dialogDescription")}
-              </DialogDescription>
-            </DialogHeader>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-4"
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <ActionButton
+                variant="default"
+                disabled={isPending}
+                loading={isPending}
               >
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("add.emailLabel")}</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder={t("add.emailPlaceholder")}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <DialogFooter>
-                  <ActionButton
-                    type="submit"
-                    loading={isPending}
-                    disabled={isPending}
-                  >
-                    {isPending ? t("add.savingButton") : t("add.saveButton")}
-                  </ActionButton>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                <Plus className="h-4 w-4 mr-2" />
+                {t("add.buttonLabel")}
+              </ActionButton>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t("add.dialogTitle")}</DialogTitle>
+                <DialogDescription>
+                  {t("add.dialogDescription")}
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-4"
+                >
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t("add.emailLabel")}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder={t("add.emailPlaceholder")}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <DialogFooter>
+                    <ActionButton
+                      type="submit"
+                      loading={isPending}
+                      disabled={isPending}
+                    >
+                      {isPending ? t("add.savingButton") : t("add.saveButton")}
+                    </ActionButton>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
-        <div className="px-6 py-3 space-y-4">
-          <div className="relative w-full overflow-auto">
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead key={header.id}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
+      <div className="layout-split-pane flex flex-col justify-between grow overflow-y-auto">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background z-10">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )}
+                  </TableHead>
                 ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(
+                      cell.column.columnDef.cell,
+                      cell.getContext(),
+                    )}
+                  </TableCell>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="py-2 border-t text-start text-sm">
-            {t("table.totalCount", {
-              count: table.getFilteredRowModel().rows.length,
-            })}
-          </div>
-        </div>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
 }
+
+export const DeveloperUser = ({
+  developer,
+  isYou,
+}: {
+  developer: Developer;
+  isYou: boolean;
+}) => {
+  const t = useTranslations("devCenter.developers");
+  const { user } = developer;
+  const userName = user.name || user.email.split("@")[0];
+
+  return (
+    <div className="flex items-center gap-3 min-h-[35px]">
+      <Avatar
+        className="h-8 w-8"
+        image={user.avatar}
+        displayName={userName}
+      />
+      <div className="flex flex-col text-sm">
+        <div className="flex items-center gap-2">
+          <span>{userName}</span>
+          {isYou && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1">
+              {t("columns.youBadge")}
+            </Badge>
+          )}
+        </div>
+        <span className="text-gray-500 text-xs">{user.email}</span>
+      </div>
+    </div>
+  );
+};
 
 const inviteFormSchema = (t: ReturnType<typeof useTranslations>) =>
   z.object({

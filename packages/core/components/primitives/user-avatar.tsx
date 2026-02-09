@@ -22,7 +22,7 @@ import { useAccount } from "@heiso/core/providers/account";
 import { usePermissionContext } from "@heiso/core/providers/permission";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 export interface UserAvatarMenuItem {
   id: string;
@@ -42,6 +42,7 @@ export function UserAvatar({
 }) {
   const { account } = useAccount();
   const { role } = usePermissionContext();
+  const { data: session } = useSession();
 
   // const menu = [
   //   {
@@ -168,12 +169,16 @@ export function UserAvatar({
             }
 
             if (item.type === "LogOut") {
+              // DevLogin users should be redirected to /devlogin after logout
+              const isAdminUser = (session?.user as any)?.isAdminUser;
+              const logoutPath = isAdminUser ? "/devlogin" : "/login";
+
               return (
                 <DropdownMenuItem
                   key={item.id}
                   onClick={() => {
                     signOut({
-                      callbackUrl: `${window.location.origin}/login`,
+                      callbackUrl: `${window.location.origin}${logoutPath}`,
                     });
                   }}
                 >

@@ -8,14 +8,12 @@ export default async function DeveloperPage() {
   const t = await getTranslations("devCenter.developers");
 
   return (
-    <div className="container m-auto max-w-6xl justify-start py-10 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
+    <div className="flex w-full h-full bg-sub-background">
+      <div className="main-section-item grow w-full overflow-hidden">
+        <Suspense fallback={<div>{t("loading")}</div>}>
+          <DeveloperList data={developers} />
+        </Suspense>
       </div>
-
-      <Suspense fallback={<div>{t("loading")}</div>}>
-        <DeveloperList data={developers} />
-      </Suspense>
     </div>
   );
 }

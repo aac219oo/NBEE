@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { Layout } from "@heiso/core/components/primitives/layout";
 import type { UserAvatarMenuItem } from "@heiso/core/components/primitives/user-avatar";
 import type { Navigation } from "@heiso/core/types/client";
+import { getTranslations } from "next-intl/server";
+import { PermissionProvider } from "@heiso/core/providers/permission";
 
 const nav: Navigation = {
   rootPath: "/dev-center",
@@ -86,6 +88,8 @@ export default async function DashboardLayout({
   const session = await auth();
   const isDeveloper = session?.user?.isDeveloper;
 
+  const t = await getTranslations("devCenter.userMenu");
+
   const userAvatarMenu = [
     {
       id: "user",
@@ -93,13 +97,13 @@ export default async function DashboardLayout({
       group: [
         {
           id: "dashboard",
-          text: "Dashboard",
+          text: t("dashboard"),
           href: "/dashboard",
           type: "Link",
         },
         {
           id: "accountSettings",
-          text: "Account Settings",
+          text: t("accountSettings"),
           href: "/account/me",
           type: "Link",
         },
@@ -126,19 +130,19 @@ export default async function DashboardLayout({
     // },
     {
       id: "logOut",
-      text: "Log out",
+      text: t("logOut"),
       type: "LogOut",
     },
   ] satisfies UserAvatarMenuItem[];
 
-  // if (isDeveloper) {
-  //   userAvatarMenu[0].group?.push({
-  //     id: 'dev-center',
-  //     text: 'Dev Center',
-  //     href: '/dev-center',
-  //     type: 'Link',
-  //   });
-  // }
+  if (isDeveloper) {
+    userAvatarMenu[0].group?.push({
+      id: "dev-center",
+      text: t("developer"),
+      href: "/dev-center",
+      type: "Link",
+    });
+  }
 
   return (
     <Suspense
@@ -148,25 +152,27 @@ export default async function DashboardLayout({
         </div>
       }
     >
-      <Layout
-        breadcrumb={{
-          items: [
-            {
-              title: "Dev Center",
-            },
-          ],
-        }}
-        navigation={isDeveloper ? nav : undefined}
-        menu={userAvatarMenu}
-      >
-        {!isDeveloper ? (
-          <div className="h-full flex items-center justify-center">
-            Only admin can access this area
-          </div>
-        ) : (
-          children
-        )}
-      </Layout>
+      <PermissionProvider>
+        <Layout
+          breadcrumb={{
+            items: [
+              {
+                title: "Dev Center",
+              },
+            ],
+          }}
+          navigation={isDeveloper ? nav : undefined}
+          menu={userAvatarMenu}
+        >
+          {!isDeveloper ? (
+            <div className="h-full flex items-center justify-center">
+              Only admin can access this area
+            </div>
+          ) : (
+            children
+          )}
+        </Layout>
+      </PermissionProvider>
     </Suspense>
   );
 }
