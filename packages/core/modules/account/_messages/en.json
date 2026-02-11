@@ -139,6 +139,14 @@
         "error": "Failed to update password"
       }
     },
+    "loginMethod": {
+      "title": "Login Method",
+      "description": "Account login method",
+      "label": "Current Login Method",
+      "password": "Password",
+      "otp": "OTP (Email)",
+      "2fa": "2FA"
+    },
     "2fa": {
       "title": "Two-Factor Authentication",
       "description": "Enable two-factor authentication for additional account security",
