@@ -1,0 +1,3 @@
+[submodule "apps/test"]
+	path = apps/test
+	url = https://github.com/Heiso-admin/test
