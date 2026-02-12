@@ -43,7 +43,7 @@ import {
 } from "@heiso/core/modules/dev-center/permission/_server/permission.service";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { CheckedState } from "@radix-ui/react-checkbox";
-import { PencilIcon, SquarePlus, TrashIcon } from "lucide-react";
+import { ChevronDown, ChevronRight, PencilIcon, SquarePlus, TrashIcon } from "lucide-react";
 import { DynamicIcon, type IconName } from "lucide-react/dynamic";
 import { useCallback, useState, useTransition } from "react";
 import { type UseFormReturn, useForm } from "react-hook-form";
@@ -80,12 +80,14 @@ type PermissionFormValues = z.infer<typeof permissionFormSchema>;
 export function PermissionCard({
   permissionGroup,
   selectable,
+  expansionVersion,
 }: {
   permissionGroup: PermissionGroup;
   selectable?: {
     value: string[];
     onCheckedChange?: (value: string[]) => void;
   };
+  expansionVersion?: { version: number; expanded: boolean };
 }) {
   const [isCreatePending, startCreateTransition] = useTransition();
   const [isEditPending, startEditTransition] = useTransition();
@@ -97,6 +99,13 @@ export function PermissionCard({
     permissionGroup.permissions,
   );
   const [_isAll, setIsAll] = useState<CheckedState>(false);
+  const [isExpanded, setIsExpanded] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (expansionVersion) {
+      setIsExpanded(expansionVersion.expanded);
+    }
+  }, [expansionVersion]);
 
   const _getOverallCheckboxState = useCallback(
     (list: { checked?: boolean }[]): CheckedState => {
@@ -252,9 +261,17 @@ export function PermissionCard({
       />
 
       <Card className="shadow-none rounded-lg gap-0 h-full">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-between">
-            <div className="flex items-center space-x-2">
+        <CardHeader className="space-y-1 py-3 px-4">
+          <div className="flex justify-between items-center">
+            <div
+              className="flex items-center space-x-2 cursor-pointer flex-1"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <ChevronDown className="size-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="size-4 text-muted-foreground" />
+              )}
               <CardTitle className="text-md font-medium text-gray-500 flex items-center gap-2">
                 {permissionGroup.icon && (
                   <DynamicIcon
@@ -270,7 +287,8 @@ export function PermissionCard({
               className="text-gray-500"
               variant="ghost"
               size="icon_sm"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 form.reset({
                   resource: "",
                   action: "",
@@ -282,83 +300,85 @@ export function PermissionCard({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="pt-0">
-          {localPermissions.length > 0 && (
-            <>
-              <div className="flex items-center space-x-2 mb-4 p-2 bg-muted/30 rounded-md">
-                <Checkbox
-                  id={`select-all-${permissionGroup.id}`}
-                  checked={_isAll}
-                  onCheckedChange={(checked: boolean) =>
-                    _handleToggleAll(checked)
-                  }
-                />
-                <label
-                  htmlFor={`select-all-${permissionGroup.id}`}
-                  className="text-sm font-semibold leading-none cursor-pointer"
-                >
-                  Select All
-                </label>
-              </div>
-              <Separator className="mb-4" />
-            </>
-          )}
-          <div className="space-y-2">
-            {permissionGroup.permissions.map((permission) => {
-              const uiId = `${permission.resource}:${permission.action}:${permission.id}`;
-              return (
-                <div
-                  key={`${permission.id}:${permission.resource}:${permission.action}`}
-                  className="flex min-h-6 items-center justify-between mb-0"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id={uiId}
-                      checked={permission?.checked}
-                      onCheckedChange={(isChecked) => {
-                        _handlePermissionChange(isChecked, permission);
-                      }}
-                    />
-                    <label
-                      htmlFor={uiId}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                      {permission.resource}: {permission.action}
-                    </label>
-                  </div>
-
-                  {permission.db && (
-                    <div className="flex items-center">
-                      <Button
-                        className="text-gray-500 "
-                        variant="ghost"
-                        size="icon_sm"
-                        onClick={() =>
-                          openEditDialog({
-                            id: permission.id,
-                            resource: permission.resource,
-                            action: permission.action,
-                          })
-                        }
+        {isExpanded && (
+          <CardContent className="pt-0">
+            {localPermissions.length > 0 && (
+              <>
+                <div className="flex items-center space-x-2 mb-4 p-2 bg-muted/30 rounded-md">
+                  <Checkbox
+                    id={`select-all-${permissionGroup.id}`}
+                    checked={_isAll}
+                    onCheckedChange={(checked: boolean) =>
+                      _handleToggleAll(checked)
+                    }
+                  />
+                  <label
+                    htmlFor={`select-all-${permissionGroup.id}`}
+                    className="text-sm font-semibold leading-none cursor-pointer"
+                  >
+                    Select All
+                  </label>
+                </div>
+                <Separator className="mb-4" />
+              </>
+            )}
+            <div className="space-y-2">
+              {permissionGroup.permissions.map((permission) => {
+                const uiId = `${permission.resource}:${permission.action}:${permission.id}`;
+                return (
+                  <div
+                    key={`${permission.id}:${permission.resource}:${permission.action}`}
+                    className="flex min-h-6 items-center justify-between mb-0"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={uiId}
+                        checked={permission?.checked}
+                        onCheckedChange={(isChecked) => {
+                          _handlePermissionChange(isChecked, permission);
+                        }}
+                      />
+                      <label
+                        htmlFor={uiId}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                       >
-                        <PencilIcon className="size-4" />
-                      </Button>
-                      <DeleteConfirm id={permission.id}>
+                        {permission.resource}: {permission.action}
+                      </label>
+                    </div>
+
+                    {permission.db && (
+                      <div className="flex items-center">
                         <Button
+                          className="text-gray-500 "
                           variant="ghost"
                           size="icon_sm"
-                          className="text-gray-500"
+                          onClick={() =>
+                            openEditDialog({
+                              id: permission.id,
+                              resource: permission.resource,
+                              action: permission.action,
+                            })
+                          }
                         >
-                          <TrashIcon className="size-4" />
+                          <PencilIcon className="size-4" />
                         </Button>
-                      </DeleteConfirm>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
+                        <DeleteConfirm id={permission.id}>
+                          <Button
+                            variant="ghost"
+                            size="icon_sm"
+                            className="text-gray-500"
+                          >
+                            <TrashIcon className="size-4" />
+                          </Button>
+                        </DeleteConfirm>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   );

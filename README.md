@@ -211,3 +211,13 @@ We recommend setting up a Postgres MCP server to allow AI agents to inspect your
 
 ---
 Powered by [NBEE Team](https://github.com/Heiso-admin)
+
+---
+
+## 📚 文件對應 (Documentation Mapping)
+
+為了讓 AI 代理人與開發者更容易理解程式碼與文件之間的關係，我們建立了一個對應索引：
+
+- 📄 **[程式碼與文件對應表 (Code to Doc Mapping)](./CODE_MAPPING.md)**
+
+詳細的架構文件與規格說明請參考外部文件庫 `NBEE-Doc`。

@@ -23,12 +23,6 @@ const nav: Navigation = {
         icon: "settings",
       },
       {
-        id: "Menu",
-        title: "Menu",
-        path: "/menu",
-        icon: "menu",
-      },
-      {
         id: "Permission",
         title: "Permission",
         path: "/permission",

@@ -7,28 +7,6 @@
     "logOut": "登出",
     "developer": "開發中心"
   },
-  "menu": {
-    "title": "選單",
-    "loading": "正在加載選單...",
-    "total": "({count} / 無限制)",
-    "actions": {
-      "add": {
-        "title": "新增選單",
-        "button": "新增",
-        "parent_title": " - {title}"
-      },
-      "edit": {
-        "title": "編輯選單"
-      },
-      "remove": {
-        "title": "刪除選單",
-        "content": "您確定要刪除此選單嗎？",
-        "cancel": "取消",
-        "confirm": "刪除",
-        "removing": "刪除中..."
-      }
-    }
-  },
   "settings": {
     "title": "設置",
     "basic": {

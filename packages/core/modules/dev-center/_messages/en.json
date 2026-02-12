@@ -7,28 +7,6 @@
     "logOut": "Log out",
     "developer": "Dev Center"
   },
-  "menu": {
-    "title": "Menu",
-    "loading": "Loading menus...",
-    "total": "({count} / Unlimited)",
-    "actions": {
-      "add": {
-        "title": "Add new menu",
-        "button": "Add new",
-        "parent_title": " - {title}"
-      },
-      "edit": {
-        "title": "Edit menu"
-      },
-      "remove": {
-        "title": "Delete menu",
-        "content": "Are you sure you want to delete this menu?",
-        "cancel": "Cancel",
-        "confirm": "Remove",
-        "removing": "Removing..."
-      }
-    }
-  },
   "settings": {
     "title": "Settings",
     "basic": {

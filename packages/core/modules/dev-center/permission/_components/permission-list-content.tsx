@@ -3,6 +3,8 @@
 import { SearchInput } from "@heiso/core/components/ui/search-input";
 import { useState, useMemo } from "react";
 import { PermissionCard, type PermissionGroup, type Permission } from "@heiso/core/components/primitives/permission-card";
+import { Button } from "@heiso/core/components/ui/button";
+import { ChevronsDownUp } from "lucide-react";
 
 export function PermissionListContent({
     groups
@@ -10,6 +12,7 @@ export function PermissionListContent({
     groups: PermissionGroup[]
 }) {
     const [search, setSearch] = useState("");
+    const [expansionVersion, setExpansionVersion] = useState({ version: 0, expanded: true });
 
     const filteredGroups = useMemo(() => {
         if (!search) return groups;
@@ -23,10 +26,20 @@ export function PermissionListContent({
         })).filter(group => group.permissions.length > 0);
     }, [groups, search]);
 
+    const collapseAll = () => setExpansionVersion(prev => ({ version: prev.version + 1, expanded: false }));
+
     return (
         <>
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end mb-4 gap-2">
+                <div className="flex items-center">
+                    <Button
+                        variant="ghost"
+                        size="icon_sm"
+                        onClick={collapseAll}
+                        title="全部收合"
+                    >
+                        <ChevronsDownUp className="size-4 text-muted-foreground" />
+                    </Button>
                 </div>
                 <SearchInput
                     value={search}
@@ -39,7 +52,11 @@ export function PermissionListContent({
             <div className="grow w-full overflow-y-auto grid grid-cols-1 gap-6 pb-10">
                 {filteredGroups.length > 0 ? (
                     filteredGroups.map((group) => (
-                        <PermissionCard permissionGroup={group} key={group.id} />
+                        <PermissionCard
+                            permissionGroup={group}
+                            key={group.id}
+                            expansionVersion={expansionVersion}
+                        />
                     ))
                 ) : (
                     <div className="h-64 flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed rounded-xl">
