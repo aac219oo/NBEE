@@ -29,6 +29,7 @@ export const apiKeys = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: varchar("name", { length: 100 }).notNull(),
     key: varchar("key", { length: 255 }).notNull().unique(),
+    truncatedKey: varchar("truncated_key", { length: 30 }),
     rateLimit: json("rate_limit").default({ requests: 100, window: 60 }),
     lastUsedAt: timestamp("last_used_at"),
     expiresAt: timestamp("expires_at"),

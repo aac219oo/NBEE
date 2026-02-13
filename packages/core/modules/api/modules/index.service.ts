@@ -8,6 +8,7 @@ export async function verifyApiKey(key: string): Promise<{
   valid: boolean;
   userId?: string;
   apiKeyId?: string;
+  tenantId?: string;
   rateLimit?: {
     window: number;
     requests: number;
@@ -26,6 +27,7 @@ export async function verifyApiKey(key: string): Promise<{
       columns: {
         id: true,
         userId: true,
+        tenantId: true,
         rateLimit: true,
         expiresAt: true,
       },
@@ -60,6 +62,7 @@ export async function verifyApiKey(key: string): Promise<{
       valid: true,
       userId: apiKey.userId,
       apiKeyId: apiKey.id,
+      tenantId: apiKey.tenantId,
       rateLimit: rateLimit,
     };
   } catch (error) {

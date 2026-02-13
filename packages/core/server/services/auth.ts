@@ -155,12 +155,16 @@ export async function signup(input: {
               console.log("[DEBUG] No API Key found. Generating new API Key...");
               const rawKey = generateApiKey();
               const hashedKey = await hashApiKey(rawKey);
+              const truncatedKey = rawKey.length <= 12
+                ? rawKey
+                : `${rawKey.substring(0, 7)}...${rawKey.substring(rawKey.length - 4)}`;
 
               await tx.insert(apiKeys).values({
                 tenantId: tenantId,
                 userId: user.id,
                 name: 'Default API Key',
                 key: hashedKey,
+                truncatedKey,
               });
 
               console.log(`[Signup] -----------------------------------------------------------`);

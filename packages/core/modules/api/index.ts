@@ -2,28 +2,14 @@ import { swagger } from "@elysiajs/swagger";
 import pkg from "@heiso/core/package.json";
 import { Elysia } from "elysia";
 import { modules } from "./modules";
+import { corsPlugin } from "./plugins";
 
 const { name, version } = pkg;
 export const app = new Elysia({ prefix: "/api" })
   .headers({
     "X-Powered-By": name,
   })
-  // Manually handle CORS to avoid Response.clone errors in Next.js
-  .onBeforeHandle(({ request, set, headers }) => {
-    const origin = (headers.origin as string | undefined) ?? "*";
-    set.headers["Access-Control-Allow-Origin"] = origin;
-    set.headers["Access-Control-Allow-Credentials"] = "true";
-    set.headers["Access-Control-Allow-Headers"] =
-      "authorization, content-type, x-requested-with, x-api-key";
-    set.headers["Access-Control-Allow-Methods"] =
-      "GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS";
-
-    // Preflight requests
-    if (request.method === "OPTIONS") {
-      set.status = 204 as const;
-      return new Response(null, { status: 204, headers: set.headers as any });
-    }
-  })
+  .use(corsPlugin)
   .use(
     swagger({
       path: "/docs",

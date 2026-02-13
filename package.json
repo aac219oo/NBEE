@@ -104,7 +104,7 @@
         "dotenv-flow": "^4.1.0",
         "drizzle-orm": "^0.44.6",
         "drizzle-zod": "^0.8.3",
-        "elysia": "^1.4.13",
+        "elysia": "1.4.24",
         "embla-carousel-react": "^8.6.0",
         "emblor": "^1.4.8",
         "framer-motion": "^12.16.0",

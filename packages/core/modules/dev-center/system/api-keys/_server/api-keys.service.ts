@@ -10,9 +10,10 @@ import { revalidatePath } from "next/cache";
 import { getTenantId } from "@heiso/core/lib/utils/tenant";
 import { ensureTenantContext } from "@heiso/core/lib/db/rls";
 
-// Get API key prefix for display
-function getKeyPrefix(key: string): string {
-  return `${key.substring(0, 12)}...`;
+// Generate masked display key from raw key (e.g. sk_a1b2...f6e5)
+function truncateKey(rawKey: string): string {
+  if (rawKey.length <= 12) return rawKey;
+  return `${rawKey.substring(0, 7)}...${rawKey.substring(rawKey.length - 4)}`;
 }
 
 type TApiKeyWithKeyPrefix = TPublicApiKey & { keyPrefix: string };
@@ -63,7 +64,7 @@ export async function getApiKeysList(
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        keyPrefix: apiKeys.key, // We'll transform this to show only prefix
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -76,11 +77,11 @@ export async function getApiKeysList(
       .limit(limit)
       .offset(start);
 
-    // Transform results to hide full key
+    // Transform results to use truncated key for display
     const transformedResults: TApiKeyWithKeyPrefix[] = results.map(
       (result) => ({
         ...result,
-        keyPrefix: getKeyPrefix(result.keyPrefix),
+        keyPrefix: result.truncatedKey || '???',
       }),
     );
 
@@ -121,7 +122,7 @@ export async function getApiKey(
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        keyPrefix: apiKeys.key,
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -139,7 +140,7 @@ export async function getApiKey(
     const apiKey = result[0];
     return {
       ...apiKey,
-      keyPrefix: getKeyPrefix(apiKey.keyPrefix),
+      keyPrefix: apiKey.truncatedKey || '???',
     };
   } catch (error) {
     console.error("Error fetching API key:", error);
@@ -182,7 +183,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
     // Generate new API key
     const newKey = generateApiKey();
     const hashedKey = await hashApiKey(newKey);
-    const keyPrefix = getKeyPrefix(newKey);
+    const keyPrefix = truncateKey(newKey);
 
     const [result] = await db
       .insert(apiKeys)
@@ -191,6 +192,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
         tenantId,
         name: data.name,
         key: hashedKey,
+        truncatedKey: keyPrefix,
         rateLimit: data.rateLimit,
         expiresAt: data.expiresAt,
       })
@@ -212,6 +214,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
       success: true,
       apiKey: {
         ...result,
+        truncatedKey: keyPrefix,
         keyPrefix,
         key: newKey, // Return the actual key only on creation
       },
@@ -257,7 +260,7 @@ export async function updateApiKey(
         tenantId: apiKeys.tenantId,
         name: apiKeys.name,
         userId: apiKeys.userId,
-        keyPrefix: apiKeys.key,
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -271,7 +274,7 @@ export async function updateApiKey(
 
     const updatedApiKey: TApiKeyWithKeyPrefix = {
       ...result[0],
-      keyPrefix: getKeyPrefix(result[0].keyPrefix),
+      keyPrefix: result[0].truncatedKey || '???',
     };
 
     revalidatePath("/dashboard/settings/api-keys", "page");
