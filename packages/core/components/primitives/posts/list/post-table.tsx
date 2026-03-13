@@ -20,6 +20,11 @@ import {
 } from "@tanstack/react-table";
 import { cn } from "@udecode/cn";
 import { Edit2, Link2, UserRound } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@heiso/core/components/ui/tooltip";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCallback, useMemo, useState } from "react";
@@ -41,6 +46,8 @@ export type PostRow = {
   updater?: { id: string; name: string } | null;
   status: string;
   menus: Menu[];
+  type?: string;
+  slug?: string;
 };
 
 export function PostTable({
@@ -53,6 +60,7 @@ export function PostTable({
   linkBase,
   globalFilter,
   translationItem,
+  showVisualEditor,
 }: {
   className?: string;
   posts: PostRow[];
@@ -63,6 +71,8 @@ export function PostTable({
   linkBase?: string;
   globalFilter?: string;
   translationItem?: string;
+  /** 是否顯示 Visual Editor 入口按鈕 */
+  showVisualEditor?: boolean;
 }) {
   const { site } = useSite();
   const tPosts = useTranslations("components.posts");
@@ -76,6 +86,7 @@ export function PostTable({
       return {
         view: `${base}/${post.id}`,
         edit: `${base}/${post.id}/edit`,
+        visual: `${base}/${post.id}/visual`,
       };
     },
     [linkBase],
@@ -124,7 +135,7 @@ export function PostTable({
               </Link>
               {post.isPublished && post.status !== PostStatus.Hidden && (
                 <Link
-                  href={`${site?.basic.base_url}/pages/${post.id}`}
+                  href={`${site?.basic.base_url?.endsWith('/') ? site.basic.base_url.slice(0, -1) : site?.basic.base_url || ''}${post.type ? `/${post.type}` : ''}${post.slug?.startsWith('/') ? post.slug : `/${post.slug || `pages/${post.id}`}`}`}
                   className="text-gray-500 ml-1"
                   target="_blank"
                 >
@@ -198,12 +209,30 @@ export function PostTable({
           const links = defaultBuildLink(post);
           return (
             <div className="w-full flex items-center justify-center gap-0.5">
-              <Link
-                href={links.edit}
-                className="flex items-center cursor-pointer"
-              >
-                <Edit2 className="mr-2 h-4 w-4" />
-              </Link>
+              {/* <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={links.edit}
+                    className="flex items-center cursor-pointer p-1 hover:bg-muted rounded"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent>編輯</TooltipContent>
+              </Tooltip> */}
+              {showVisualEditor && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={links.visual}
+                      className="flex items-center cursor-pointer p-1 hover:bg-muted rounded"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent>編輯</TooltipContent>
+                </Tooltip>
+              )}
               <PostActions
                 post={post}
                 onDelete={onDelete}
@@ -227,6 +256,7 @@ export function PostTable({
       site?.basic?.base_url,
       onDuplicate,
       onToggleStatus,
+      showVisualEditor,
     ],
   );
 

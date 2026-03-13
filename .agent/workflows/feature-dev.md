@@ -8,7 +8,7 @@ description: 標準化功能開發流程 (Standard Feature Development Workflow)
 
 ## 1. 需求理解與規劃 (Pre-coding)
 在寫任何一行程式碼之前：
-1.  **閱讀規格**: 參考 `skills/nbee-dev` 中的 `Unified Development Standards`。
+1.  **閱讀規格**: 使用 `skills/nbee-dev`。
     -   必須從 `NBEE-Doc/product-specs` 開始確認需求。
 2.  **確認範圍**: 判斷功能屬於 `packages/core` (共用) 還是 `apps/others` (專用)。
 3.  **檢查依賴**: 確認是否需要新增 `./package.json` 依賴或修改 `drizzle` Schema。

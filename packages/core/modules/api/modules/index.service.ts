@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 // Verify API key (for authentication middleware)
 export async function verifyApiKey(key: string): Promise<{
   valid: boolean;
-  userId?: string;
+  accountId?: string;
   apiKeyId?: string;
   rateLimit?: {
     window: number;
@@ -58,7 +58,7 @@ export async function verifyApiKey(key: string): Promise<{
 
     return {
       valid: true,
-      userId: apiKey.accountId ?? undefined,
+      accountId: apiKey.accountId ?? undefined,
       apiKeyId: apiKey.id,
       rateLimit: rateLimit,
     };
@@ -71,7 +71,7 @@ export async function verifyApiKey(key: string): Promise<{
 // Store API key access log
 export async function storeApiKeyAccessLog(params: {
   apiKeyId: string;
-  userId: string;
+  accountId: string;
   endpoint: string;
   method: string;
   statusCode: number;
@@ -84,7 +84,7 @@ export async function storeApiKeyAccessLog(params: {
   try {
     await db.insert(apiKeyAccessLogs).values({
       apiKeyId: params.apiKeyId,
-      accountId: params.userId,
+      accountId: params.accountId,
       endpoint: params.endpoint,
       method: params.method,
       statusCode: params.statusCode,

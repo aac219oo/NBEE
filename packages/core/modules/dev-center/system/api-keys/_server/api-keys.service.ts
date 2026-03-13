@@ -8,9 +8,10 @@ import { auth } from "@heiso/core/modules/auth/auth.config";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-// Get API key prefix for display
-function getKeyPrefix(key: string): string {
-  return `${key.substring(0, 12)}...`;
+// Generate truncated key for display (e.g., sk_a1b2...f6e5)
+function truncateKey(rawKey: string): string {
+  if (rawKey.length <= 12) return rawKey;
+  return `${rawKey.substring(0, 7)}...${rawKey.substring(rawKey.length - 4)}`;
 }
 
 type TApiKeyWithKeyPrefix = TPublicApiKey & { keyPrefix: string };
@@ -46,7 +47,7 @@ export async function getApiKeysList(
         id: apiKeys.id,
         name: apiKeys.name,
         accountId: apiKeys.accountId,
-        keyPrefix: apiKeys.key,
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -59,11 +60,11 @@ export async function getApiKeysList(
       .limit(limit)
       .offset(start);
 
-    // Transform results to hide full key
+    // Transform results to use truncated key for display
     const transformedResults: TApiKeyWithKeyPrefix[] = results.map(
       (result) => ({
         ...result,
-        keyPrefix: getKeyPrefix(result.keyPrefix),
+        keyPrefix: result.truncatedKey || "???",
       }),
     );
 
@@ -99,7 +100,7 @@ export async function getApiKey(
         id: apiKeys.id,
         name: apiKeys.name,
         accountId: apiKeys.accountId,
-        keyPrefix: apiKeys.key,
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -117,7 +118,7 @@ export async function getApiKey(
     const apiKey = result[0];
     return {
       ...apiKey,
-      keyPrefix: getKeyPrefix(apiKey.keyPrefix),
+      keyPrefix: apiKey.truncatedKey || "???",
     };
   } catch (error) {
     console.error("Error fetching API key:", error);
@@ -157,7 +158,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
     // Generate new API key
     const newKey = generateApiKey();
     const hashedKey = await hashApiKey(newKey);
-    const keyPrefix = getKeyPrefix(newKey);
+    const keyPrefix = truncateKey(newKey);
 
     const [result] = await db
       .insert(apiKeys)
@@ -165,6 +166,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
         accountId: session.user.id,
         name: data.name,
         key: hashedKey,
+        truncatedKey: keyPrefix,
         rateLimit: data.rateLimit,
         expiresAt: data.expiresAt,
       })
@@ -172,6 +174,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
         id: apiKeys.id,
         name: apiKeys.name,
         accountId: apiKeys.accountId,
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -185,7 +188,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
       success: true,
       apiKey: {
         ...result,
-        keyPrefix,
+        keyPrefix: result.truncatedKey || keyPrefix,
         key: newKey, // Return the actual key only on creation
       },
     };
@@ -226,7 +229,7 @@ export async function updateApiKey(
         id: apiKeys.id,
         name: apiKeys.name,
         accountId: apiKeys.accountId,
-        keyPrefix: apiKeys.key,
+        truncatedKey: apiKeys.truncatedKey,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -240,7 +243,7 @@ export async function updateApiKey(
 
     const updatedApiKey: TApiKeyWithKeyPrefix = {
       ...result[0],
-      keyPrefix: getKeyPrefix(result[0].keyPrefix),
+      keyPrefix: result[0].truncatedKey || "???",
     };
 
     revalidatePath("/dashboard/settings/api-keys", "page");

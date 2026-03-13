@@ -28,7 +28,7 @@ const modules = new Elysia({
 
     return {
       authenticated: true,
-      userId: verification.userId,
+      accountId: verification.accountId,
       apiKeyId: verification.apiKeyId,
       // capture request start time for response time calculation
       requestStartTime: Date.now(),
@@ -71,10 +71,10 @@ const modules = new Elysia({
   })
   // .use(rateLimitPlugin)
   .onAfterHandle(
-    async ({ request, headers, set, apiKeyId, userId, requestStartTime }) => {
+    async ({ request, headers, set, apiKeyId, accountId, requestStartTime }) => {
       // console.log('rateLimitOptions: ', rateLimitOptions);
       try {
-        if (!apiKeyId || !userId) return;
+        if (!apiKeyId || !accountId) return;
 
         const url = new URL(request.url);
         const endpoint = url.pathname;
@@ -86,7 +86,7 @@ const modules = new Elysia({
 
         await storeApiKeyAccessLog({
           apiKeyId,
-          userId,
+          accountId,
           endpoint,
           method,
           statusCode,
