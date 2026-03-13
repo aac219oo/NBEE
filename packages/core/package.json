@@ -27,9 +27,9 @@
     "dev": "bun run:permission && bun x next dev --turbo",
     "build": "bun x next build",
     "start": "bun x next start",
-    "db": "bun drizzle-kit generate",
-    "db:push": "bun drizzle-kit push",
-    "db:studio": "bun drizzle-kit studio",
+    "db:generate": "bun db:generate",
+    "db:push": "bun db:push",
+    "db:studio": "bun db:studio",
     "run:permission": "bun scripts/fetchPermissionFromDb.ts",
     "email:dev": "bun email dev",
     "lint": "biome check",
@@ -37,7 +37,11 @@
   },
   "devDependencies": {
     "@heiso/biome-config": "workspace:*",
-    "@heiso/typescript-config": "workspace:*"
+    "@heiso/typescript-config": "workspace:*",
+    "@heiso/drizzle-config": "workspace:*"
+  },
+  "dependencies": {
+    "@heiso/hive": "workspace:*"
   },
   "typesVersions": {
     "*": {

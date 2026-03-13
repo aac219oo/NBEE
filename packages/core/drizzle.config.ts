@@ -1,14 +1,13 @@
 import "dotenv-flow/config";
-import { defineConfig } from "drizzle-kit";
+import { createDrizzleConfig } from "@heiso/drizzle-config";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set");
 }
 
-export default defineConfig({
+export default createDrizzleConfig({
   out: "./drizzle",
   schema: "./lib/db/schema/index.ts",
-  dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,
   },
