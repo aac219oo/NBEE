@@ -175,13 +175,16 @@ async function invite({
     revalidatePath("/account/team", "page");
     return created;
   } else {
-    // APPS 模式：透過 Hive 服務
+    // APPS 模式：透過 Platform Adapter
     let accountId = providedAccountId;
     if (!accountId) {
       if (!email) throw new Error("EMAIL_OR_ACCOUNT_ID_REQUIRED");
-      const { getHiveService } = await import("@heiso/hive");
-      const { getAccountWithCreate } = await getHiveService();
-      accountId = await getAccountWithCreate({ email, name });
+      const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+      const adapter = getPlatformAccountAdapter();
+      if (!adapter) {
+        throw new Error("PlatformAccountAdapter not registered");
+      }
+      accountId = await adapter.getAccountWithCreate({ email, name });
     }
 
     // 檢查是否已存在此帳號的成員
@@ -506,15 +509,19 @@ async function addMember({
     revalidatePath("/account/team", "page");
     return { member: account };
   } else {
-    // APPS 模式：透過 Hive 服務
-    const { getAccountWithPassword, createDevAccount } = await import("@heiso/hive/services/account");
+    // APPS 模式：透過 Platform Adapter
+    const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+    const adapter = getPlatformAccountAdapter();
+    if (!adapter) {
+      throw new Error("PlatformAccountAdapter not registered");
+    }
 
-    let account = await getAccountWithPassword(email);
+    let account = await adapter.getAccountByEmail(email);
 
     if (!account && initialPassword) {
       const hashedPassword = await hashPassword(initialPassword);
       const displayName = email.split("@")[0];
-      account = await createDevAccount(email, hashedPassword, displayName);
+      account = await adapter.createDevAccount(email, hashedPassword, displayName);
     }
 
     if (!account) {
@@ -752,10 +759,14 @@ async function resetMemberPassword({
       return { success: false, error: "MEMBER_NOT_FOUND" };
     }
 
-    // 透過 Hive 服務更新密碼
-    const { updateAccountPassword } = await import("@heiso/hive/services/account");
+    // 透過 Platform Adapter 更新密碼
+    const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+    const adapter = getPlatformAccountAdapter();
+    if (!adapter) {
+      return { success: false, error: "PLATFORM_ADAPTER_NOT_REGISTERED" };
+    }
     const hashedPassword = await hashPassword(newPassword);
-    await updateAccountPassword(target.accountId, hashedPassword, true);
+    await adapter.updatePassword(target.accountId, hashedPassword, true);
 
     return { success: true };
   }

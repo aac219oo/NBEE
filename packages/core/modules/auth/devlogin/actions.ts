@@ -55,9 +55,13 @@ async function ensureDevAccountExists(email: string) {
       lastLoginAt: account.lastLoginAt,
     };
   } else {
-    // APPS 模式：使用 Hive 服務
-    const { createDevAccount } = await import("@heiso/hive/services/account");
-    return createDevAccount(email, randomPassword, displayName);
+    // APPS 模式：使用 Platform Adapter
+    const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+    const adapter = getPlatformAccountAdapter();
+    if (!adapter) {
+      throw new Error("PlatformAccountAdapter not registered");
+    }
+    return adapter.createDevAccount(email, randomPassword, displayName);
   }
 }
 

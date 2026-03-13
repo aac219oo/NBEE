@@ -118,6 +118,35 @@ export interface PlatformAccountAdapter {
         active: boolean;
         avatar?: string | null;
     } | null>;
+
+    /**
+     * Update account password
+     */
+    updatePassword(accountId: string, hashedPassword: string, mustChange?: boolean): Promise<void>;
+
+    /**
+     * Check if account is a Platform Developer
+     */
+    checkIsPlatformDeveloper(accountId: string): Promise<boolean>;
+
+    /**
+     * Create a dev account with developer role
+     */
+    createDevAccount(email: string, hashedPassword: string, name: string): Promise<{
+        id: string;
+        email: string;
+        name: string;
+        password: string;
+        active: boolean;
+        avatar?: string | null;
+        lastLoginAt?: Date | null;
+    }>;
+
+    /**
+     * Get or create account (for invite flow)
+     * Returns account ID
+     */
+    getAccountWithCreate(data: { email: string; name?: string }): Promise<string>;
 }
 
 // ============================================================================

@@ -32,10 +32,12 @@ async function updatePassword(
       })
       .where(eq(accounts.id, accountId));
   } else {
-    const { updateAccountPassword } = await import(
-      "@heiso/hive/services/account"
-    );
-    await updateAccountPassword(accountId, hashedPassword, mustChange);
+    const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+    const adapter = getPlatformAccountAdapter();
+    if (!adapter) {
+      throw new Error("PlatformAccountAdapter not registered");
+    }
+    await adapter.updatePassword(accountId, hashedPassword, mustChange);
   }
 }
 

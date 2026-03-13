@@ -30,13 +30,15 @@ export type HiveAccount = {
 };
 
 /**
- * 動態載入 Hive 服務（僅在非 Core 模式時使用）
+ * 取得 PlatformAccountAdapter（僅在非 Core 模式時使用）
  */
-async function getHiveServices() {
-  const { getAccountWithPassword, checkIsPlatformDeveloper } = await import(
-    "@heiso/hive/services/account"
-  );
-  return { getAccountWithPassword, checkIsPlatformDeveloper };
+async function getPlatformAdapter() {
+  const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+  const adapter = getPlatformAccountAdapter();
+  if (!adapter) {
+    throw new Error("PlatformAccountAdapter not registered");
+  }
+  return adapter;
 }
 
 /**
@@ -576,9 +578,9 @@ export async function getAccountWithPasswordByEmail(
       lastLoginAt: account.lastLoginAt,
     };
   } else {
-    // APPS 模式：使用 Hive 服務
-    const { getAccountWithPassword } = await getHiveServices();
-    return getAccountWithPassword(email);
+    // APPS 模式：使用 Platform Adapter
+    const adapter = await getPlatformAdapter();
+    return adapter.getAccountByEmail(email);
   }
 }
 
@@ -599,9 +601,9 @@ export async function isUserDeveloper(accountId: string): Promise<boolean> {
 
     return account?.role === "owner";
   } else {
-    // APPS 模式：使用 Hive 服務
-    const { checkIsPlatformDeveloper } = await getHiveServices();
-    return checkIsPlatformDeveloper(accountId);
+    // APPS 模式：使用 Platform Adapter
+    const adapter = await getPlatformAdapter();
+    return adapter.checkIsPlatformDeveloper(accountId);
   }
 }
 

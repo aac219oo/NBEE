@@ -225,14 +225,16 @@ export async function updateBasicProfile({
 
     await db.update(accounts).set(updates).where(eq(accounts.id, accountId));
   } else {
-    // APPS 模式：使用 Hive 服務更新密碼
+    // APPS 模式：使用 Platform Adapter 更新密碼
     if (typeof password === "string" && password.trim().length > 0) {
       const { hashPassword } = await import("@heiso/core/lib/hash");
-      const { updateAccountPassword } = await import(
-        "@heiso/hive/services/account"
-      );
+      const { getPlatformAccountAdapter } = await import("@heiso/core/lib/adapters");
+      const adapter = getPlatformAccountAdapter();
+      if (!adapter) {
+        throw new Error("PlatformAccountAdapter not registered");
+      }
       const hashedPassword = await hashPassword(password.trim());
-      await updateAccountPassword(accountId, hashedPassword, false);
+      await adapter.updatePassword(accountId, hashedPassword, false);
     }
 
     // TODO: name 和 avatar 更新需要在 hive accounts 表實作
