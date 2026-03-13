@@ -202,6 +202,9 @@
     "packages/hive": {
       "name": "@heiso/hive",
       "version": "0.1.0",
+      "dependencies": {
+        "nanoid": "^5.1.6",
+      },
       "devDependencies": {
         "@heiso/biome-config": "workspace:*",
         "@heiso/drizzle-config": "workspace:*",

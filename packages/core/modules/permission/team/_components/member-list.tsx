@@ -33,13 +33,20 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { MoreHorizontal, Plus } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useMemo, useState } from "react";
-import type { Member } from "../_server/team.service";
+import { MemberStatus, type Member } from "../types";
+import { invite } from "../_server/team.service";
+import { ActionButton } from "@heiso/core/components/primitives/action-button";
 import { InviteMember } from "./invite-member";
 import { MemberActions } from "./member-actions";
+import { MenuAccess } from "../../role/_components/role-menu-access";
+import type { TMenu } from "@heiso/core/lib/db/schema";
 
+// moved to team.service.ts
+/*
 export enum MemberStatus {
   Invited = "invited", // 已邀請/待驗證
   Joined = "joined", // 已加入/啟用
@@ -47,23 +54,32 @@ export enum MemberStatus {
   Disabled = "suspend", // 停用/已拒絕
   Owner = "Owner", // 擁有者
 }
+*/
 
 type FilterStatus = "all" | MemberStatus;
 
 export interface Role {
   id: string;
   name: string;
-  loginMethod: string | null;
+  loginMethod?: string | null;
 }
 
 const filterStatuses: FilterStatus[] = [
   "all",
-  MemberStatus.Review,
-  MemberStatus.Joined,
-  MemberStatus.Disabled,
+  MemberStatus.Active,
+  MemberStatus.Inactive,
+  MemberStatus.Suspended,
 ];
 
-export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
+export function MemberList({
+  data,
+  roles,
+  menus,
+}: {
+  data: Member[];
+  roles: Role[];
+  menus: TMenu[];
+}) {
   const { data: session } = useSession();
   const { isDeveloper } = useAccount();
   const [filtering, setFiltering] = useState("");
@@ -84,30 +100,22 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
   // ];
 
   const showStatus = useCallback(
-    (
-      member: string | null,
-      tokenExpiredAt?: Date | null,
-      loginMethod?: string | null,
-    ) => {
-      switch (member) {
+    (status: string | null, inviteExpiredAt?: Date | null) => {
+      switch (status) {
         case MemberStatus.Invited:
-          return loginMethod !== "sso" ? (
-            tokenExpiredAt && tokenExpiredAt.getTime() > Date.now() ? (
-              <Badge status="blue">{t("statuses.invited")}</Badge>
-            ) : (
-              <Badge status="red">{t("statuses.expired")}</Badge>
-            )
-          ) : (
+          return inviteExpiredAt && inviteExpiredAt.getTime() > Date.now() ? (
             <Badge status="blue">{t("statuses.invited")}</Badge>
+          ) : (
+            <Badge status="red">{t("statuses.expired")}</Badge>
           );
-        case MemberStatus.Disabled:
-          return <Badge status="hidden">{t("statuses.declined")}</Badge>;
-        case MemberStatus.Joined:
-          return <Badge status="green">{t("statuses.joined")}</Badge>;
-        case MemberStatus.Review:
-          return <Badge status="yellow">{t("statuses.review")}</Badge>;
+        case MemberStatus.Suspended:
+          return <Badge status="hidden">{t("statuses.suspended")}</Badge>;
+        case MemberStatus.Active:
+          return <Badge status="green">{t("statuses.active")}</Badge>;
+        case MemberStatus.Inactive:
+          return <Badge status="yellow">{t("statuses.inactive")}</Badge>;
         default:
-          return member;
+          return status;
       }
     },
     [t],
@@ -117,40 +125,54 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
     {
       header: t("user"),
       accessorFn: (row) => {
-        const userName = row.user?.name || row.email.split("@")[0];
-        return `${userName} ${row.email}`;
+        const email = row.account?.email || "";
+        const userName = row.account?.name || email.split("@")[0] || "Unknown";
+        return `${userName} ${email}`;
       },
       sortingFn: "basic",
       cell: ({ row }) => {
-        const { user } = row.original;
-        const isYou = user?.id === session?.user.id;
+        const isYou = row.original.accountId === session?.user.id;
         return <MemberUser member={row.original} isYou={isYou} />;
       },
     },
     {
       accessorFn: (row) => {
-        if (row.isOwner) {
-          return MemberStatus.Owner;
+        // row.role here is the TRole relation object, but the schema also has a 'role' column
+        // We need to access the column value which is 'owner' | 'admin' | 'member'
+        const memberRole = (row as any).role;
+        if (typeof memberRole === 'string' && memberRole === 'owner') {
+          return "Owner";
         }
-        return row.role?.name || "No Role";
+        // If role is an object (TRole relation), get the name
+        if (memberRole && typeof memberRole === 'object' && 'name' in memberRole) {
+          return memberRole.name || "No Role";
+        }
+        return "No Role";
       },
       sortingFn: (rowA, rowB) => {
-        const aValue = rowA.original.isOwner
+        const aIsOwner = (rowA.original as any).role === 'owner';
+        const bIsOwner = (rowB.original as any).role === 'owner';
+        const aRole = (rowA.original as any).role;
+        const bRole = (rowB.original as any).role;
+        const aValue = aIsOwner
           ? "0_Owner"
-          : `1_${rowA.original.role?.name || "ZZZ_No_Role"}`;
-        const bValue = rowB.original.isOwner
+          : `1_${typeof aRole === 'object' ? aRole?.name : aRole || "ZZZ_No_Role"}`;
+        const bValue = bIsOwner
           ? "0_Owner"
-          : `1_${rowB.original.role?.name || "ZZZ_No_Role"}`;
+          : `1_${typeof bRole === 'object' ? bRole?.name : bRole || "ZZZ_No_Role"}`;
         return aValue.localeCompare(bValue);
       },
       header: t("role"),
       cell: ({ row }) => {
-        const isOwner = row.original.isOwner;
-        const isRole =
-          roles.find((role) => role.id === row.original.roleId)?.name || null;
+        // The member.role column value is 'owner' | 'admin' | 'member'
+        // but there's also a 'role' relation to TRole
+        const memberRole = (row.original as any).role;
+        const isOwner = memberRole === 'owner';
+        const roleRelation = roles.find((role) => role.id === row.original.roleId);
+        const roleName = roleRelation?.name || null;
 
-        if (isOwner) return <Badge variant="tag">{MemberStatus.Owner}</Badge>;
-        return isRole && <Badge variant="tag">{isRole}</Badge>;
+        if (isOwner) return <Badge variant="tag">Owner</Badge>;
+        return roleName && <Badge variant="tag">{roleName}</Badge>;
       },
     },
     {
@@ -160,8 +182,7 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
       cell: ({ row }) => {
         return showStatus(
           row.original.status,
-          row.original.tokenExpiredAt,
-          row.original.role?.loginMethod,
+          row.original.inviteExpiredAt,
         );
       },
     },
@@ -181,7 +202,7 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
     {
       header: t("updatedDate"),
       id: "lastLoginAt",
-      accessorFn: (row) => row.user?.lastLoginAt ?? null,
+      accessorFn: (row) => row.account?.lastLoginAt ?? null,
       sortingFn: "datetime",
       cell: ({ getValue }) => {
         const value = getValue() as Date | string | null;
@@ -192,7 +213,7 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
       header: t("actions"),
       id: "actions",
       cell: ({ row }) => {
-        const isYou = row.original.user?.id === session?.user.id;
+        const isYou = row.original.accountId === session?.user.id;
         return (
           !isYou && (
             <div className="w-full flex items-center justify-center gap-2">
@@ -207,6 +228,11 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
                   <span className="sr-only">{t("more")}</span>
                 </Button>
               </MemberActions>
+              <MenuAccess data={row.original.role as any} menus={menus}>
+                <ActionButton variant="ghost" className="p-2 h-auto">
+                  <ShieldCheck className="h-4 w-4" />
+                </ActionButton>
+              </MenuAccess>
               {/* </ProtectedArea> */}
             </div>
           )
@@ -249,7 +275,7 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
         <div className="flex gap-2">
           <SearchInput
             value={filtering}
-            onChange={(e) => setFiltering(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFiltering(e.target.value)}
             placeholder={t("searchMembers")}
           />
           {/* <ProtectedArea resource={'member'} action={'edit'}> */}
@@ -267,7 +293,7 @@ export function MemberList({ data, roles }: { data: Member[]; roles: Role[] }) {
       <RadioGroup
         value={filterStatus}
         className="flex items-center gap-3 mb-2"
-        onValueChange={(value) => setFilterStatus(value as FilterStatus)}
+        onValueChange={(value: string) => setFilterStatus(value as FilterStatus)}
       >
         <span className="pl-0.5 text-sm text-text-secondary">
           {t("filter.title")}:
@@ -346,14 +372,15 @@ export const MemberUser = ({
   isYou: boolean;
 }) => {
   const t = useTranslations("dashboard.permission.team.members");
-  const { email, user } = member;
-  const userName = user?.name || email.split("@")[0];
+  const { account, accountId } = member;
+  const email = account?.email || "";
+  const userName = account?.name || email.split("@")[0] || "Unknown";
   return (
     <div className="flex items-center gap-3 min-h-[35px]">
       <Avatar
         className="h-8 w-8"
-        image={user?.avatar}
-        displayName={email.split("@")[0]}
+        image={account?.avatar}
+        displayName={userName}
       />
       <div className="flex flex-col">
         <span>{userName}</span>

@@ -80,14 +80,17 @@
         "expired": "已過期",
         "declined": "停用",
         "joined": "啟動",
-        "review": "待審核"
+        "review": "待審核",
+        "active": "啟用",
+        "inactive": "停用",
+        "suspended": "已停權"
       },
       "filter": {
         "title": "篩選",
         "all": "全部",
-        "joined": "用戶",
-        "review": "待處理",
-        "suspend": "停權"
+        "active": "啟用",
+        "inactive": "停用",
+        "suspended": "已停權"
       }
     },
     "addMember": {

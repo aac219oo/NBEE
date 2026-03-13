@@ -8,7 +8,7 @@ export async function GET(req: Request) {
 
   // 若使用者已加入，無需設定 token，直接回 Dashboard
   const session = await auth();
-  if (session?.member?.status === "joined") {
+  if (session?.member?.status === "active") {
     return NextResponse.redirect("/dashboard");
   }
 

@@ -7,8 +7,6 @@ import { generateApiKey, hashApiKey } from "@heiso/core/lib/hash";
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
-import { ensureTenantContext } from "@heiso/core/lib/db/rls";
 
 // Get API key prefix for display
 function getKeyPrefix(key: string): string {
@@ -21,34 +19,20 @@ type TApiKeyWithKeyPrefix = TPublicApiKey & { keyPrefix: string };
 export async function getApiKeysList(
   options: { search?: string; start?: number; limit?: number } = {},
 ) {
-  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
     return { apiKeys: [], total: 0 };
   }
 
-  const tenantId = await getTenantId();
-
   const { search, start = 0, limit = 10 } = options;
 
   try {
     // Build where conditions
     const whereConditions = [
-      eq(apiKeys.userId, session.user.id),
+      eq(apiKeys.accountId, session.user.id),
       isNull(apiKeys.deletedAt),
     ];
-
-    if (tenantId) {
-      whereConditions.push(eq(apiKeys.tenantId, tenantId));
-    }
-
-    if (search) {
-      whereConditions.push(
-        // Add search condition for name
-        // Note: This is a simplified search, you might want to use ilike for case-insensitive search
-      );
-    }
 
     // Get total count
     const [totalResult] = await db
@@ -60,10 +44,9 @@ export async function getApiKeysList(
     const results = await db
       .select({
         id: apiKeys.id,
-        tenantId: apiKeys.tenantId,
         name: apiKeys.name,
-        userId: apiKeys.userId,
-        keyPrefix: apiKeys.key, // We'll transform this to show only prefix
+        accountId: apiKeys.accountId,
+        keyPrefix: apiKeys.key,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -98,29 +81,24 @@ export async function getApiKeysList(
 export async function getApiKey(
   id: string,
 ): Promise<TApiKeyWithKeyPrefix | null> {
-  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
     return null;
   }
 
-  const tenantId = await getTenantId();
-
   try {
     const filters = [
       eq(apiKeys.id, id),
-      eq(apiKeys.userId, session.user.id),
+      eq(apiKeys.accountId, session.user.id),
       isNull(apiKeys.deletedAt),
     ];
-    if (tenantId) filters.push(eq(apiKeys.tenantId, tenantId));
 
     const result = await db
       .select({
         id: apiKeys.id,
-        tenantId: apiKeys.tenantId,
         name: apiKeys.name,
-        userId: apiKeys.userId,
+        accountId: apiKeys.accountId,
         keyPrefix: apiKeys.key,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
@@ -169,14 +147,11 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
   apiKey?: TApiKeyWithKeyPrefix & { key: string };
   error?: string;
 }> {
-  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
     return { success: false, error: "Unauthorized" };
   }
-  const tenantId = await getTenantId();
-  if (!tenantId) return { success: false, error: "Tenant context missing" };
 
   try {
     // Generate new API key
@@ -187,8 +162,7 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
     const [result] = await db
       .insert(apiKeys)
       .values({
-        userId: session.user.id,
-        tenantId,
+        accountId: session.user.id,
         name: data.name,
         key: hashedKey,
         rateLimit: data.rateLimit,
@@ -196,9 +170,8 @@ export async function createApiKey(data: CreateApiKeyInput): Promise<{
       })
       .returning({
         id: apiKeys.id,
-        tenantId: apiKeys.tenantId,
         name: apiKeys.name,
-        userId: apiKeys.userId,
+        accountId: apiKeys.accountId,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
         expiresAt: apiKeys.expiresAt,
@@ -227,21 +200,18 @@ export async function updateApiKey(
   id: string,
   data: UpdateApiKeyInput,
 ): Promise<{ success: boolean; data?: TApiKeyWithKeyPrefix; error?: string }> {
-  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
     return { success: false, error: "Unauthorized" };
   }
-  const tenantId = await getTenantId();
 
   try {
     const filters = [
       eq(apiKeys.id, id),
-      eq(apiKeys.userId, session.user.id),
+      eq(apiKeys.accountId, session.user.id),
       isNull(apiKeys.deletedAt),
     ];
-    if (tenantId) filters.push(eq(apiKeys.tenantId, tenantId));
 
     const result = await db
       .update(apiKeys)
@@ -254,9 +224,8 @@ export async function updateApiKey(
       .where(and(...filters))
       .returning({
         id: apiKeys.id,
-        tenantId: apiKeys.tenantId,
         name: apiKeys.name,
-        userId: apiKeys.userId,
+        accountId: apiKeys.accountId,
         keyPrefix: apiKeys.key,
         rateLimit: apiKeys.rateLimit,
         lastUsedAt: apiKeys.lastUsedAt,
@@ -286,21 +255,18 @@ export async function updateApiKey(
 export async function deleteApiKey(
   id: string,
 ): Promise<{ success: boolean; error?: string }> {
-  await ensureTenantContext();
   const db = await getDynamicDb();
   const session = await auth();
   if (!session?.user?.id) {
     return { success: false, error: "Unauthorized" };
   }
-  const tenantId = await getTenantId();
 
   try {
     const filters = [
       eq(apiKeys.id, id),
-      eq(apiKeys.userId, session.user.id),
+      eq(apiKeys.accountId, session.user.id),
       isNull(apiKeys.deletedAt),
     ];
-    if (tenantId) filters.push(eq(apiKeys.tenantId, tenantId));
 
     const result = await db
       .update(apiKeys)
@@ -326,16 +292,13 @@ export async function deleteApiKey(
 // Verify API key (for authentication middleware)
 export async function verifyApiKey(key: string): Promise<{
   valid: boolean;
-  userId?: string;
+  accountId?: string;
   apiKeyId?: string;
 }> {
-  await ensureTenantContext();
   const db = await getDynamicDb();
   if (!key) {
     return { valid: false };
   }
-
-  const tenantId = await getTenantId();
 
   try {
     const hashedKey = await hashApiKey(key);
@@ -344,12 +307,11 @@ export async function verifyApiKey(key: string): Promise<{
       eq(apiKeys.key, hashedKey),
       isNull(apiKeys.deletedAt),
     ];
-    if (tenantId) filters.push(eq(apiKeys.tenantId, tenantId));
 
     const result = await db
       .select({
         id: apiKeys.id,
-        userId: apiKeys.userId,
+        accountId: apiKeys.accountId,
         expiresAt: apiKeys.expiresAt,
       })
       .from(apiKeys)
@@ -375,7 +337,7 @@ export async function verifyApiKey(key: string): Promise<{
 
     return {
       valid: true,
-      userId: apiKey.userId,
+      accountId: apiKey.accountId ?? undefined,
       apiKeyId: apiKey.id,
     };
   } catch (error) {

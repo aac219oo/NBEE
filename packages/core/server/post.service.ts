@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, exists, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { pageCategories, pageCategoryRelations, posts, users } from "@heiso/core/lib/db/schema";
+import { pageCategories, pageCategoryRelations, posts, foreignAccounts } from "@heiso/core/lib/db/schema";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import * as schema from "@heiso/core/lib/db/schema";
 import { revalidatePath } from "next/cache";
@@ -260,7 +260,7 @@ export async function getPostList({
     limit?: number;
 }) {
     const db = await getDynamicDb(schema);
-    const updaterUsers = alias(users, "updater_users");
+    const updaterUsers = alias(foreignAccounts, "updater_users");
     const whereCond = categoryId
         ? and(
             isNull(posts.deletedAt),
@@ -290,9 +290,9 @@ export async function getPostList({
             isPublished: posts.isPublished,
             updaterId: posts.updater,
             user: {
-                id: users.id,
-                name: users.name,
-                avatar: users.avatar,
+                id: foreignAccounts.id,
+                name: foreignAccounts.name,
+                avatar: foreignAccounts.avatar,
             },
             updaterUser: {
                 id: updaterUsers.id,
@@ -303,7 +303,7 @@ export async function getPostList({
             createdAt: posts.createdAt,
         })
         .from(posts)
-        .leftJoin(users, eq(posts.userId, users.id))
+        .leftJoin(foreignAccounts, eq(posts.userId, foreignAccounts.id))
         .leftJoin(updaterUsers, eq(posts.updater, updaterUsers.id))
         .where(whereCond);
 
@@ -381,12 +381,12 @@ export async function getPost(id: string): Promise<Post | null> {
                 createdAt: posts.createdAt,
                 updatedAt: posts.updatedAt,
                 updater: posts.updater,
-                userId: users.id,
-                userName: users.name,
-                userAvatar: users.avatar,
+                userId: foreignAccounts.id,
+                userName: foreignAccounts.name,
+                userAvatar: foreignAccounts.avatar,
             })
             .from(posts)
-            .leftJoin(users, eq(posts.userId, users.id))
+            .leftJoin(foreignAccounts, eq(posts.userId, foreignAccounts.id))
             .where(and(eq(posts.id, id), isNull(posts.deletedAt)))
             .orderBy(desc(posts.createdAt))
             .limit(1);

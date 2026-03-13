@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { changePassword } from "../_server/user.service";
+import { changePassword } from "../_server/password.service";
 import AuthRedirectHint from "./authRedirectHint";
 import Header from "./header";
 

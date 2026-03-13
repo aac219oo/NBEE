@@ -19,7 +19,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import type { Member } from "../_server/team.service";
+import { MemberStatus, type Member } from "../types";
 import {
   leaveTeam,
   resendInvite,
@@ -34,7 +34,7 @@ import { ConfirmResetPassword } from "./confirm-reset-password";
 import { ConfirmReviewMember } from "./confirm-review-member";
 import { ConfirmTransferOwner } from "./confirm-transfer-owner";
 import { EditMember } from "./edit-member";
-import { MemberStatus, type Role } from "./member-list";
+import type { Role } from "./member-list";
 
 export function MemberActions({
   member,
@@ -66,25 +66,25 @@ export function MemberActions({
   const [openReviewConfirm, setOpenReviewConfirm] = useState<boolean>(false);
 
   const lastOwner =
-    currentMembers.filter((m) => m.isOwner && m.status === MemberStatus.Joined)
+    currentMembers.filter((m) => m.role === 'owner' && m.status === MemberStatus.Active)
       .length === 1;
 
   // 檢查當前用戶是否為擁有者
   const currentUserMember = currentMembers.find(
-    (m) => m.user?.id === session?.user?.id,
+    (m) => m.accountId === session?.user?.id,
   );
-  const isCurrentUserOwner = currentUserMember?.isOwner;
+  const isCurrentUserOwner = currentUserMember?.role === 'owner';
   const canTransferTo =
-    member.status === MemberStatus.Joined &&
-    member.user?.id !== session?.user?.id;
-  const isUserNotReview = member.status !== MemberStatus.Review;
-  const loginMethod =
-    roles.find((role) => role.id === member.roleId)?.loginMethod || null;
+    member.status === MemberStatus.Active &&
+    member.accountId !== session?.user?.id;
+  const isUserActive = member.status === MemberStatus.Active;
+  const email = member.account?.email || "";
+  const userName = member.account?.name || email.split("@")[0] || "Unknown";
 
   const InvitationExpired =
     member.status === MemberStatus.Invited &&
-    member.tokenExpiredAt &&
-    member.tokenExpiredAt.getTime() < Date.now();
+    member.inviteExpiredAt &&
+    member.inviteExpiredAt.getTime() < Date.now();
 
   const actionItems = [
     {
@@ -92,7 +92,7 @@ export function MemberActions({
       key: "edit" as const,
       label: t("edit.title"),
       Icon: Edit2,
-      visible: !isDeveloper && isUserNotReview,
+      visible: !isDeveloper && isUserActive,
       onClick: () => setOpenEditConfirm(true),
     },
     {
@@ -102,7 +102,6 @@ export function MemberActions({
       Icon: Copy,
       visible:
         !InvitationExpired &&
-        loginMethod !== "sso" &&
         member.status === MemberStatus.Invited,
       onClick: () => {
         if (settings && member?.inviteToken) {
@@ -119,7 +118,6 @@ export function MemberActions({
       Icon: Send,
       visible:
         InvitationExpired &&
-        loginMethod !== "sso" &&
         member.status === MemberStatus.Invited,
       onClick: () => {
         startResendTransition(async () => {
@@ -134,16 +132,8 @@ export function MemberActions({
       label: t("transfer.title"),
       Icon: Crown,
       visible:
-        !isDeveloper && isCurrentUserOwner && canTransferTo && isUserNotReview,
+        !isDeveloper && isCurrentUserOwner && canTransferTo && isUserActive,
       onClick: () => setOpenTransferConfirm(true),
-    },
-    {
-      // 審查用戶狀態，僅擁有者可操作
-      key: "review" as const,
-      label: t("review.action"),
-      Icon: BadgeCheck,
-      visible: isCurrentUserOwner && member.status === MemberStatus.Review,
-      onClick: () => setOpenReviewConfirm(true),
     },
     {
       // 協助啟用的用戶重設密碼，僅擁有者可操作
@@ -152,10 +142,9 @@ export function MemberActions({
       Icon: RotateCcwKey,
       visible:
         !isDeveloper &&
-        loginMethod !== "sso" &&
         isCurrentUserOwner &&
-        member.status === MemberStatus.Joined &&
-        isUserNotReview,
+        member.status === MemberStatus.Active &&
+        isUserActive,
       onClick: () => setOpenResetPassword(true),
     },
     {
@@ -191,20 +180,20 @@ export function MemberActions({
     });
   };
 
-  const handleApproveReview = (roleId: string | null, isOwner: boolean) => {
+  const handleApproveReview = (roleId: string | null, role: 'owner' | 'admin' | 'member') => {
     startReviewTransition(async () => {
       try {
         await updateMember({
           id: member.id,
           data: {
-            isOwner: isOwner,
+            role: role,
             roleId: roleId,
-            status: MemberStatus.Joined,
+            status: MemberStatus.Active,
           },
         });
         toast.success(t("review.success"));
         await sendApproved({
-          email: member.email,
+          email: email,
         });
         setOpenReviewConfirm(false);
       } catch (error) {
@@ -219,7 +208,7 @@ export function MemberActions({
       try {
         await updateMember({
           id: member.id,
-          data: { status: MemberStatus.Disabled },
+          data: { status: MemberStatus.Suspended },
         });
         toast.success(t("review.success"));
         setOpenReviewConfirm(false);
@@ -313,7 +302,7 @@ export function MemberActions({
         open={openRemoveConfirm}
         onClose={() => setOpenRemoveConfirm(false)}
         data={{
-          email: member.email,
+          email: email,
         }}
         pending={isRemovePending}
         onConfirm={handleRemove}
@@ -324,7 +313,7 @@ export function MemberActions({
         description={
           <>
             An invitation will be sent to
-            <span className="font-medium">{member.email}</span>
+            <span className="font-medium">{email}</span>
           </>
         }
         open={openResendConfirm}
@@ -339,7 +328,7 @@ export function MemberActions({
         open={openEditConfirm}
         onClose={setOpenEditConfirm}
         lastOwner={
-          lastOwner && member.isOwner && member.status !== MemberStatus.Disabled
+          lastOwner && member.role === 'owner' && member.status !== MemberStatus.Suspended
         }
       />
 
@@ -347,8 +336,8 @@ export function MemberActions({
         open={openTransferConfirm}
         onClose={() => setOpenTransferConfirm(false)}
         data={{
-          email: member.email,
-          name: member.user?.name,
+          email: email,
+          name: userName,
         }}
         pending={isTransferPending}
         onConfirm={handleTransfer}

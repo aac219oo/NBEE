@@ -1,5 +1,4 @@
 import { generateId } from "@heiso/core/lib/id-generator";
-import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -8,33 +7,27 @@ import {
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { users } from "./user";
 
+/**
+ * user2faCode - 2FA 驗證碼
+ *
+ * accountId 關聯到 Platform.accounts (透過 FDW)
+ */
 export const user2faCode = pgTable(
   "user_2fa_code",
   {
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$default(() => generateId()),
-    userId: varchar("user_id", { length: 20 })
-      .references(() => users.id, { onDelete: "cascade" })
-      .notNull(),
+    // TODO: 資料遷移後改回 .notNull()
+    accountId: varchar("account_id", { length: 50 }),
     code: text("code").notNull(),
     used: boolean("used").default(false),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
-    // Index for faster lookups by userId
-    index("user_2fa_code_user_id_idx").on(table.userId),
-    // Composite index for checking unused codes that haven't expired
+    index("user_2fa_code_account_id_idx").on(table.accountId),
     index("user_2fa_code_valid_idx").on(table.used, table.expiresAt),
   ],
 );
-
-export const user2faCodeRelations = relations(user2faCode, ({ one }) => ({
-  user: one(users, {
-    fields: [user2faCode.userId],
-    references: [users.id],
-  }),
-}));

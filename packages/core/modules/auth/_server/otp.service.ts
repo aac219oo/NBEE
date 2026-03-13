@@ -3,10 +3,10 @@
 import { settings } from "@heiso/core/config/settings";
 import TwoFactorEmail from "@heiso/core/emails/2fa";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import { user2faCode, users } from "@heiso/core/lib/db/schema";
+import { user2faCode } from "@heiso/core/lib/db/schema";
 import { sendEmail } from "@heiso/core/lib/email";
 import { and, eq, gt, lt } from "drizzle-orm";
-import { getUser } from "./user.service";
+import { getAccountByEmail, isUserDeveloper, getMember } from "./user.service";
 
 export interface OTPGenerationResult {
   success: boolean;
@@ -32,8 +32,8 @@ function generateOTPCode(): string {
  */
 export async function generateOTP(email: string): Promise<OTPGenerationResult> {
   try {
-    const user = await getUser(email);
-    if (!user) {
+    const account = await getAccountByEmail(email);
+    if (!account) {
       return {
         success: false,
         message: "userNotFound",
@@ -41,39 +41,22 @@ export async function generateOTP(email: string): Promise<OTPGenerationResult> {
     }
 
     const db = await getDynamicDb();
+    const isDeveloper = await isUserDeveloper(account.id);
 
     // 如果用户不是开发者，检查用户是否已加入组织
-    if (!user?.developer) {
+    if (!isDeveloper) {
       // 查找用户
-      const member = await db.query.members.findFirst({
-        columns: {
-          id: true,
-          email: true,
-          status: true,
-          userId: true,
-        },
-        with: {
-          user: {
-            columns: {
-              id: true,
-              email: true,
-              name: true,
-              active: true,
-            },
-          },
-        },
-        where: (t, { eq }) => eq(t.email, email),
-      });
+      const member = await getMember(account.id);
 
-      if (!member || !member.user) {
+      if (!member) {
         return {
           success: false,
           message: "userNotFound",
         };
       }
 
-      // Joined 狀態等於帳號啟用
-      if (member.status !== "joined") {
+      // Active 狀態等於帳號啟用
+      if (member.status !== "active") {
         return {
           success: false,
           message: "notActive",
@@ -82,7 +65,7 @@ export async function generateOTP(email: string): Promise<OTPGenerationResult> {
     }
 
     // 清理该用户的过期验证码
-    await cleanupExpiredOTPs(user.id);
+    await cleanupExpiredOTPs(account.id);
 
     // 生成新的验证码
     const code = generateOTPCode();
@@ -90,7 +73,7 @@ export async function generateOTP(email: string): Promise<OTPGenerationResult> {
 
     // 保存到数据库
     await db.insert(user2faCode).values({
-      userId: user.id,
+      accountId: account.id,
       code,
       used: false,
       expiresAt,
@@ -105,13 +88,13 @@ export async function generateOTP(email: string): Promise<OTPGenerationResult> {
     // 发送邮件
     const { NOTIFY_EMAIL } = await settings();
     await sendEmail({
-      from: NOTIFY_EMAIL as string,
-      to: [user.email],
+      from: (NOTIFY_EMAIL as string) || "noreply@heiso.com",
+      to: [account.email as string],
       subject: "Your Login Verification Code",
       body: TwoFactorEmail({
         logoUrl: logo,
         code,
-        username: user.name,
+        username: account.name ?? "",
         expiresInMinutes: 10,
       }),
     });
@@ -140,11 +123,9 @@ export async function verifyOTP(
   try {
     const db = await getDynamicDb();
     // 查找用户
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email),
-    });
+    const account = await getAccountByEmail(email);
 
-    if (!user) {
+    if (!account) {
       return {
         success: false,
         message: "userNotFound",
@@ -154,7 +135,7 @@ export async function verifyOTP(
     // 查找有效的验证码
     const otpRecord = await db.query.user2faCode.findFirst({
       where: and(
-        eq(user2faCode.userId, user.id),
+        eq(user2faCode.accountId, account.id),
         eq(user2faCode.code, code),
         eq(user2faCode.used, false),
         gt(user2faCode.expiresAt, new Date()),
@@ -174,16 +155,10 @@ export async function verifyOTP(
       .set({ used: true })
       .where(eq(user2faCode.id, otpRecord.id));
 
-    // 更新用户最后登录时间
-    await db
-      .update(users)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(users.id, user.id));
-
     return {
       success: true,
       message: "OTP verified successfully",
-      userId: user.id,
+      userId: account.id, // Keeping userId in response interface for backwards compatibility
     };
   } catch (error) {
     console.error("Error verifying OTP:", error);
@@ -197,17 +172,17 @@ export async function verifyOTP(
 /**
  * 清理过期的 OTP 验证码
  */
-export async function cleanupExpiredOTPs(userId?: string): Promise<void> {
+export async function cleanupExpiredOTPs(accountId?: string): Promise<void> {
   try {
     const db = await getDynamicDb();
     const now = new Date();
 
-    if (userId) {
+    if (accountId) {
       // 清理特定用户的过期验证码
       await db
         .delete(user2faCode)
         .where(
-          and(eq(user2faCode.userId, userId), lt(user2faCode.expiresAt, now)),
+          and(eq(user2faCode.accountId, accountId), lt(user2faCode.expiresAt, now)),
         );
     } else {
       // 清理所有过期验证码
@@ -224,17 +199,15 @@ export async function cleanupExpiredOTPs(userId?: string): Promise<void> {
 export async function hasValidOTP(email: string): Promise<boolean> {
   try {
     const db = await getDynamicDb();
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email),
-    });
+    const account = await getAccountByEmail(email);
 
-    if (!user) {
+    if (!account) {
       return false;
     }
 
     const validOTP = await db.query.user2faCode.findFirst({
       where: and(
-        eq(user2faCode.userId, user.id),
+        eq(user2faCode.accountId, account.id),
         eq(user2faCode.used, false),
         gt(user2faCode.expiresAt, new Date()),
       ),
@@ -253,17 +226,15 @@ export async function hasValidOTP(email: string): Promise<boolean> {
 export async function getOTPStatus(email: string) {
   try {
     const db = await getDynamicDb();
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email),
-    });
+    const account = await getAccountByEmail(email);
 
-    if (!user) {
+    if (!account) {
       return null;
     }
 
     const validOTP = await db.query.user2faCode.findFirst({
       where: and(
-        eq(user2faCode.userId, user.id),
+        eq(user2faCode.accountId, account.id),
         eq(user2faCode.used, false),
         gt(user2faCode.expiresAt, new Date()),
       ),
@@ -273,7 +244,8 @@ export async function getOTPStatus(email: string) {
     return {
       hasValidOTP: !!validOTP,
       expiresAt: validOTP?.expiresAt,
-      twoFactorEnabled: user.twoFactorEnabled,
+      // twoFactorEnabled: account.twoFactorEnabled, // Currently foreign accounts might not fetch this field
+      twoFactorEnabled: false, // Defaulting to false until settings support it or fetched differently
     };
   } catch (error) {
     console.error("Error getting OTP status:", error);

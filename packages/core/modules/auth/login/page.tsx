@@ -10,8 +10,9 @@ import { Login } from "../_components";
 import InitializeTenantForm from "../_components/InitializeTenantForm";
 import {
   checkTenantHasOwner,
-  ensureMemberReviewOnFirstLogin,
+  ensureMemberOnFirstLogin,
   getMember,
+  getAccountByEmail,
 } from "../_server/user.service";
 import { headers } from "next/headers";
 import { provisionTenantDb, seedDefaults } from "@heiso/core/modules/system/provisioning";
@@ -39,7 +40,7 @@ export default async function Page({
     let needsProvisioning = false;
 
     try {
-      hasOwner = await checkTenantHasOwner(tenantId);
+      hasOwner = await checkTenantHasOwner();
       // If table exists but no owner, it might mean partial initialization or just new tenant.
       // We should arguably run provisioning here too to ensure menus/defaults exist.
       if (!hasOwner) {
@@ -118,8 +119,7 @@ export default async function Page({
 
     // Fix: Verify if user really exists in DB (Zombie Session Check)
     if (sessionEmail) {
-      const { getUser } = await import("../_server/user.service");
-      const dbUser = await getUser(sessionEmail);
+      const dbUser = await getAccountByEmail(sessionEmail);
       if (!dbUser) {
         // User in session but not in DB. Force logout.
         redirect("/api/auth/signout");
@@ -131,27 +131,35 @@ export default async function Page({
       redirect("/dashboard");
     }
 
-    const member = await getMember({ id: userId, email: sessionEmail });
+    const member = userId ? await getMember(userId) : null;
 
     if (member) {
-      oAuthData = member;
+      oAuthData = {
+        userId: member.accountId,
+        email: session.user.email ?? null,
+        status: member.status,
+      };
       // 已加入：直接進 Dashboard
-      if (member.status === "joined") {
+      if (member.status === "active") {
         redirect("/dashboard");
       }
 
-      // 非 joined：如無錯誤參數才導向 Pending；有錯誤時留在 login 顯示錯誤
+      // 非 active：如無錯誤參數才導向 Pending；有錯誤時留在 login 顯示錯誤
       if (!error) {
         redirect(`/pending?error=${error}`);
       }
     } else {
       // 無成員紀錄：第一次登入，建立/刷新 member 並設為 review，不寄送 email
-      if (sessionEmail) {
+      if (sessionEmail && userId) {
         try {
-          await ensureMemberReviewOnFirstLogin(sessionEmail, userId);
-          const refreshed = await getMember({ email: sessionEmail });
+          await ensureMemberOnFirstLogin(userId);
+          const refreshed = await getMember(userId);
           if (refreshed) {
-            oAuthData = refreshed;
+            oAuthData = {
+              userId: refreshed.accountId,
+              email: sessionEmail,
+              status: refreshed.status,
+            };
           }
           email = sessionEmail;
         } catch {

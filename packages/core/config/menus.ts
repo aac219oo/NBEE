@@ -1,18 +1,12 @@
-export const DASHBOARD_DEFAULT_MENUS = {
-  role: {
-    group: "membership",
-    name: "Role",
-    path: "/role",
-    icon: "square-user-round",
-    title: "Role",
-    order: 0,
-  },
-  team: {
-    group: "membership",
-    name: "Team",
-    path: "/team",
-    icon: "users-round",
-    title: "Team",
-    order: 0,
-  },
+export type DashboardMenu = {
+  group: string;
+  name: string;
+  path: string;
+  icon: string;
+  title: string;
+  order: number;
+};
+
+export const DASHBOARD_DEFAULT_MENUS: Record<string, DashboardMenu> = {
+  // role 和 team 已移至 /account/ 路徑下
 };

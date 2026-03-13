@@ -5,8 +5,11 @@ import type { SiteSetting } from "@heiso/core/modules/dev-center/system/settings
 
 export async function getSiteSettings(): Promise<SiteSetting> {
   const db = await getDynamicDb();
-  const settings = await db.query.siteSettings.findMany({
-    where: (fields, { isNull }) => isNull(fields.deletedAt),
+  const settings = await db.query.settings.findMany({
+    where: (fields, { and, eq, isNull }) => and(
+      isNull(fields.deletedAt),
+      eq(fields.group, 'site'),
+    ),
   });
 
   const result: Record<string, unknown> = {};

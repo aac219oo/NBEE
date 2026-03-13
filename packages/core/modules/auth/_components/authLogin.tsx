@@ -1,5 +1,5 @@
-import { MemberStatus } from "@heiso/core/modules/permission/team/_components/member-list";
 import { invite } from "@heiso/core/modules/permission/team/_server/team.service";
+import { MemberStatus } from "@heiso/core/modules/permission/team/types";
 import { ActionButton } from "@heiso/core/components/primitives/action-button";
 import {
   Form,
@@ -24,6 +24,7 @@ import {
   getMemberStatus,
   getUserLoginMethod,
   isUserDeveloper,
+  getAccountByEmail,
 } from "../_server/user.service";
 import Header from "./header";
 import { type LoginStep, LoginStepEnum } from "./loginForm";
@@ -74,7 +75,12 @@ const AuthLogin = ({
     // 僅當系統「完全沒有任何使用者」時，才寄送登入連結
     if (!anyUser) {
       try {
-        await invite({ email: values.email, role: "owner" });
+        const account = await getAccountByEmail(values.email);
+        if (!account) {
+          setError("Platform account not found. Please register first.");
+          return;
+        }
+        await invite({ accountId: account.id, roleId: undefined });
         setError("");
       } catch (e) {
         console.error("Failed to send login link email", e);
@@ -86,10 +92,15 @@ const AuthLogin = ({
     } else {
       startTransition(async () => {
         try {
-          const isDeveloper = await isUserDeveloper(values.email);
-          const userAuth = await getUserLoginMethod(values.email);
-          const loginMethod = await getLoginMethod(values.email); // 登入方式
-          const memberStatus = await getMemberStatus(values.email); // 成員狀態
+          const account = await getAccountByEmail(values.email);
+          if (!account) {
+            return setError(t("error.userNotFound"));
+          }
+
+          const isDeveloper = await isUserDeveloper(account.id);
+          const userAuth = await getUserLoginMethod(account.id);
+          const loginMethod = await getLoginMethod(account.id); // 登入方式
+          const memberStatus = await getMemberStatus(account.id); // 成員狀態
 
           if (isDeveloper) {
             const loginMethod = "both";
@@ -116,11 +127,15 @@ const AuthLogin = ({
             return setError(t("error.invited"));
           }
 
-          if (memberStatus === MemberStatus.Review) {
-            return setError(t("error.review"));
+          if (memberStatus === MemberStatus.Inactive) {
+            return setError(t("error.inactive"));
           }
 
-          if (memberStatus !== MemberStatus.Joined) {
+          if (memberStatus === MemberStatus.Suspended) {
+            return setError(t("error.suspended"));
+          }
+
+          if (memberStatus !== MemberStatus.Active) {
             throw new Error("USER_NOT_ACTIVATED");
           }
 

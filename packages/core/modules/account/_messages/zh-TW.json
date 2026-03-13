@@ -5,11 +5,13 @@
     },
     "navigation": {
       "preferences": "偏好設定",
-      "authentication": "驗證"
+      "authentication": "驗證",
+      "team": "團隊成員",
+      "role": "角色管理"
     },
     "userMenu": {
       "dashboard": "儀表板",
-      "accountSettings": "帳戶設定",
+      "accountSettings": "設定",
       "theme": "主題",
       "homePage": "首頁",
       "logOut": "登出",

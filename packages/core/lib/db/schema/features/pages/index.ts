@@ -16,7 +16,7 @@ import {
 } from "drizzle-zod";
 import type zod from "zod/v4";
 import { generateId } from "@heiso/core/lib/id-generator";
-import { users } from "../../auth";
+import { foreignAccounts } from "../../foreign";
 
 export const pageTemplates = pgTable(
   "page_templates",
@@ -24,9 +24,7 @@ export const pageTemplates = pgTable(
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$defaultFn(() => generateId()),
-    userId: varchar("user_id", { length: 20 })
-      .notNull()
-      .references(() => users.id),
+    userId: varchar("user_id", { length: 50 }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     pageId: varchar("page_id", { length: 20 }),
     thumbnail: varchar("thumbnail", { length: 255 }),
@@ -48,9 +46,7 @@ export const posts = pgTable(
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$defaultFn(() => generateId()),
-    userId: varchar("user_id", { length: 20 })
-      .notNull()
-      .references(() => users.id),
+    userId: varchar("user_id", { length: 50 }).notNull(),
     // categoryId: varchar('category_id', { length: 20 }),
     slug: varchar("slug", { length: 255 }).notNull(),
     title: varchar("title", { length: 255 }),
@@ -61,7 +57,7 @@ export const posts = pgTable(
     html: text("html"),
     contentMobile: json("content_mobile"),
     htmlMobile: text("html_mobile"),
-    updater: varchar("updater", { length: 20 }).references(() => users.id),
+    updater: varchar("updater", { length: 50 }),
     status: varchar("status", { length: 20 }).notNull().default("draft"),
     isPublished: timestamp("is_published"),
     savedTemplateId: varchar("saved_template_id", { length: 20 }).references(
@@ -86,13 +82,11 @@ export const pageCategories = pgTable(
       .notNull()
       .primaryKey()
       .$defaultFn(() => generateId()),
-    userId: varchar("user_id", { length: 20 })
-      .notNull()
-      .references(() => users.id),
+    userId: varchar("user_id", { length: 50 }).notNull(),
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
     description: text("description"),
-    order: integer("order_number").default(0),
+    sortOrder: integer("sort_order").default(0),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -104,9 +98,7 @@ export const tags = pgTable(
   "tags",
   {
     id: varchar("id", { length: 200 }).notNull().primaryKey(),
-    userId: varchar("user_id", { length: 20 })
-      .notNull()
-      .references(() => users.id),
+    userId: varchar("user_id", { length: 50 }).notNull(),
     name: varchar("name", { length: 100 }).notNull(),
     slug: varchar("slug", { length: 100 }).notNull().unique(),
     postCount: integer("post_count").default(0),
@@ -135,9 +127,9 @@ export const pageCategoryRelations = pgTable(
 );
 
 export const postRelations = relations(posts, ({ one, many }) => ({
-  user: one(users, {
+  user: one(foreignAccounts, {
     fields: [posts.userId],
-    references: [users.id],
+    references: [foreignAccounts.id],
   }),
   categories: many(pageCategoryRelations),
 }));
@@ -159,18 +151,18 @@ export const postPageCategoryRelations = relations(
 export const pageCategoriesRelations = relations(
   pageCategories,
   ({ one, many }) => ({
-    user: one(users, {
+    user: one(foreignAccounts, {
       fields: [pageCategories.userId],
-      references: [users.id],
+      references: [foreignAccounts.id],
     }),
     posts: many(pageCategoryRelations),
   }),
 );
 
 export const tagRelations = relations(tags, ({ one, many }) => ({
-  user: one(users, {
+  user: one(foreignAccounts, {
     fields: [tags.userId],
-    references: [users.id],
+    references: [foreignAccounts.id],
   }),
   posts: many(posts),
 }));

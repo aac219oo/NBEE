@@ -80,14 +80,17 @@
         "expired": "Expired",
         "declined": "Declined",
         "joined": "Joined",
-        "review": "Review"
+        "review": "Review",
+        "active": "Active",
+        "inactive": "Inactive",
+        "suspended": "Suspended"
       },
       "filter": {
         "title": "Filter",
         "all": "All",
-        "joined": "Users",
-        "review": "Applications",
-        "suspend": "Suspend"
+        "active": "Active",
+        "inactive": "Inactive",
+        "suspended": "Suspended"
       }
     },
     "addMember": {

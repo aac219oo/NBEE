@@ -47,7 +47,7 @@ const config = {
               meta: {
                 url: "/preferences",
                 icon: "UserPen",
-                title: "Account Settings",
+                title: "Settings",
               },
             },
             {

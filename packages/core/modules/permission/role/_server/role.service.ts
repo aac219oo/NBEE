@@ -11,7 +11,6 @@ import type {
 import { roles } from "@heiso/core/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
 
 export type Role = TRole & {
   menus: {
@@ -23,9 +22,6 @@ export type Role = TRole & {
 };
 
 async function getRoles(): Promise<Role[]> {
-  const tenantId = await getTenantId();
-  if (!tenantId) return [];
-
   const db = await getDynamicDb();
   const result = await db.query.roles.findMany({
     with: {
@@ -40,56 +36,42 @@ async function getRoles(): Promise<Role[]> {
         },
       },
     },
-    where: (t, { and, isNull, eq }) => {
-      const filters = [isNull(t.deletedAt)];
-      if (tenantId) {
-        filters.push(eq(t.tenantId, tenantId));
-      }
-      return and(...filters);
-    },
+    where: (t, { isNull }) => isNull(t.deletedAt),
     orderBy: (t, { asc }) => [asc(t.createdAt)],
   });
 
   return result;
 }
 
-async function createRole(data: Omit<TRoleInsert, "tenantId">) {
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
-
+async function createRole(data: TRoleInsert) {
   const db = await getDynamicDb();
-  const result = await db.insert(roles).values({ ...data, tenantId });
-  revalidatePath("/dashboard/role", "page");
+  const result = await db.insert(roles).values(data);
+  revalidatePath("/account/role", "page");
   return result;
 }
 
 async function updateRole(id: string, data: TRoleUpdate) {
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
-
   const db = await getDynamicDb();
   const result = await db
     .update(roles)
-    .set(data)
-    .where(and(eq(roles.id, id), eq(roles.tenantId, tenantId)));
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(roles.id, id));
 
-  revalidatePath("/dashboard/role", "page");
+  revalidatePath("/account/role", "page");
   return result;
 }
 
 async function deleteRole({ id }: { id: string }) {
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
-
   const db = await getDynamicDb();
   const result = await db
     .update(roles)
     .set({
       deletedAt: new Date(),
+      updatedAt: new Date(),
     })
-    .where(and(eq(roles.id, id), eq(roles.tenantId, tenantId), isNull(roles.deletedAt)));
+    .where(and(eq(roles.id, id), isNull(roles.deletedAt)));
 
-  revalidatePath("/dashboard/role", "page");
+  revalidatePath("/account/role", "page");
   return result;
 }
 

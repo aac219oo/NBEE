@@ -1,65 +1,51 @@
 "use server";
 
-import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import type { TDeveloper, TUser } from "@heiso/core/lib/db/schema";
-import { developers } from "@heiso/core/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
-import { getTranslations } from "next-intl/server";
+/**
+ * Developer 服務
+ *
+ * 注意：developers 表已遷移至 Platform DB 的 platformRoles
+ * 這些操作需要透過 Platform API 實現
+ *
+ * Platform 角色類型：
+ * - 'root': 擁有控制平面 (Hive) 的絕對權限
+ * - 'developer': 負責 App Catalog 與系統擴展開發
+ * - 'user': 一般使用者（僅用於 SSO 登入）
+ */
 
-type Developer = TDeveloper & {
-  user: TUser;
+import type { TForeignAccount } from "@heiso/core/lib/db/schema";
+
+type Developer = {
+  accountId: string;
+  role: string;
+  createdAt: Date;
+  user: TForeignAccount;
 };
 
+/**
+ * @deprecated Use Platform API to manage platform roles
+ */
 async function getDevelopers(): Promise<Developer[]> {
-  const db = await getDynamicDb();
-  const devs = await db.query.developers.findMany({
-    with: {
-      user: true,
-    },
-  });
-
-  return devs;
+  console.warn("[getDevelopers] Requires Platform API implementation");
+  // TODO: 呼叫 Platform API 取得 platformRoles where role = 'developer'
+  return [];
 }
 
-async function addDeveloper({ email }: { email: string }): Promise<TDeveloper> {
-  const db = await getDynamicDb();
-  const t = await getTranslations("devCenter.developers");
-
-  const user = await db.query.users.findFirst({
-    where: (t, { eq }) => eq(t.email, email),
-  });
-
-  if (!user) {
-    throw new Error(t("errors.user_not_found"));
-  }
-
-  const [dev] = await db
-    .insert(developers)
-    .values({
-      userId: user.id,
-    })
-    .returning();
-
-  revalidatePath("./developers");
-  return dev;
+/**
+ * @deprecated Use Platform API to manage platform roles
+ */
+async function addDeveloper({ email }: { email: string }): Promise<{ accountId: string }> {
+  console.warn("[addDeveloper] Requires Platform API implementation");
+  // TODO: 呼叫 Platform API 新增 platformRole
+  throw new Error("Adding developer requires Platform API implementation");
 }
 
-async function removeDeveloper({ id }: { id: string }): Promise<TDeveloper> {
-  const db = await getDynamicDb();
-  const t = await getTranslations("devCenter.developers");
-
-  const [dev] = await db
-    .delete(developers)
-    .where(eq(developers.userId, id))
-    .returning();
-
-  if (!dev) {
-    throw new Error(t("errors.developer_not_found"));
-  }
-
-  revalidatePath("./developers");
-  return dev;
+/**
+ * @deprecated Use Platform API to manage platform roles
+ */
+async function removeDeveloper({ id }: { id: string }): Promise<{ accountId: string }> {
+  console.warn("[removeDeveloper] Requires Platform API implementation");
+  // TODO: 呼叫 Platform API 移除 platformRole
+  throw new Error("Removing developer requires Platform API implementation");
 }
 
 export { getDevelopers, addDeveloper, removeDeveloper, type Developer };

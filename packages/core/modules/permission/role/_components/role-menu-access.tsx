@@ -47,7 +47,7 @@ export function MenuAccess({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      selectedMenus: data?.menus.map((e) => e.menus.id) ?? [],
+      selectedMenus: data?.menus?.map((e) => e.menus.id) ?? [],
     },
   });
 

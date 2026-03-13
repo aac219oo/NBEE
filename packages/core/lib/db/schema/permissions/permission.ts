@@ -9,17 +9,12 @@ import {
 import type zod from "zod";
 import { menus } from "./menu";
 
-import { sql } from "drizzle-orm";
-import { pgPolicy } from "drizzle-orm/pg-core";
-import { tenantSchema } from "../utils";
-
 export const permissions = pgTable(
   "permissions",
   {
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$default(() => generatePermissionId()),
-    ...tenantSchema,
     menuId: varchar("menu_id", { length: 20 }).references(() => menus.id),
     resource: varchar("resource", { length: 100 }).notNull(), // e.g., "user.add"
     action: varchar("action", { length: 20 }).notNull(), // e.g., "view", "click"
@@ -29,17 +24,9 @@ export const permissions = pgTable(
   },
   (table) => [
     index("permissions_menu_id_idx").on(table.menuId),
-    index("permissions_tenant_id_idx").on(table.tenantId),
     index("permissions_resource_action_idx").on(table.resource, table.action),
-    pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`${table.tenantId} = current_setting('app.current_tenant_id')`,
-      withCheck: sql`${table.tenantId} = current_setting('app.current_tenant_id')`,
-    }),
   ],
 );
-export const enablePermissionRls = sql`ALTER TABLE permissions ENABLE ROW LEVEL SECURITY; ALTER TABLE permissions FORCE ROW LEVEL SECURITY;`;
 
 export const PermissionsRelations = relations(permissions, ({ one }) => ({
   menus: one(menus, {

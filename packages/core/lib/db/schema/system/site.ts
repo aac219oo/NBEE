@@ -1,45 +1,44 @@
-import { index, json, pgPolicy, pgTable, primaryKey, timestamp, varchar } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-import { tenantSchema } from "../utils";
-import {
-  createInsertSchema,
-  createSelectSchema,
-  createUpdateSchema,
-} from "drizzle-zod";
+/**
+ * @deprecated siteSettings 已合併到 settings 表
+ * 請使用 settings 表，並以 group='site' 過濾前端設定
+ *
+ * 此檔案保留以便向後相容，將在後續版本移除
+ */
+
+import { settings, settingsSchema, settingsInsertSchema, settingsUpdateSchema } from "./setting";
 import type zod from "zod";
 
-export const siteSettings = pgTable(
-  "site_settings",
-  {
-    ...tenantSchema,
-    name: varchar("name", { length: 100 }).notNull(),
-    value: json("value").notNull(),
-    description: varchar("description", { length: 255 }),
-    deletedAt: timestamp("deleted_at"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.tenantId, t.name] }),
-    siteSettingsDeletedAtIdx: index("site_settings_deleted_at_idx").on(t.deletedAt),
-    policy: pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-      withCheck: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-    }),
-  }),
-);
+/**
+ * @deprecated 使用 settings 表並以 group='site' 過濾
+ */
+export const siteSettings = settings;
 
-export const enableSiteSettingRls = sql`
-  ALTER TABLE "site_settings" ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE "site_settings" FORCE ROW LEVEL SECURITY;
-`;
+/**
+ * @deprecated 使用 settingsSchema
+ */
+export const siteSettingsSchema = settingsSchema;
 
-export const siteSettingsSchema = createSelectSchema(siteSettings);
-export const siteSettingsInsertSchema = createInsertSchema(siteSettings);
-export const siteSettingsUpdateSchema = createUpdateSchema(siteSettings);
+/**
+ * @deprecated 使用 settingsInsertSchema
+ */
+export const siteSettingsInsertSchema = settingsInsertSchema;
 
+/**
+ * @deprecated 使用 settingsUpdateSchema
+ */
+export const siteSettingsUpdateSchema = settingsUpdateSchema;
+
+/**
+ * @deprecated 使用 TSettings
+ */
 export type TSiteSetting = zod.infer<typeof siteSettingsSchema>;
+
+/**
+ * @deprecated 使用 TSettingsInsert
+ */
 export type TSiteSettingInsert = zod.infer<typeof siteSettingsInsertSchema>;
+
+/**
+ * @deprecated 使用 TSettingsUpdate
+ */
 export type TSiteSettingUpdate = zod.infer<typeof siteSettingsUpdateSchema>;

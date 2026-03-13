@@ -1,49 +1,51 @@
-import { index, json, pgPolicy, pgTable, primaryKey, timestamp, varchar } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-import { tenantSchema } from "../utils";
+/**
+ * @deprecated generalSettings 已合併到 settings 表
+ * 請使用 settings 表，並以 group='general' 過濾一般設定
+ *
+ * 此檔案保留以便向後相容，將在後續版本移除
+ */
+
 import {
-  createInsertSchema,
-  createSelectSchema,
-  createUpdateSchema,
-} from "drizzle-zod";
-import type zod from "zod";
+  settings,
+  settingsSchema,
+  settingsInsertSchema,
+  settingsUpdateSchema,
+  type TSettings,
+  type TSettingsInsert,
+  type TSettingsUpdate,
+} from "./setting";
 
-export const generalSettings = pgTable(
-  "general_settings",
-  {
-    ...tenantSchema,
-    name: varchar("name", { length: 100 }).notNull(),
-    value: json("value").notNull(),
-    description: varchar("description", { length: 255 }),
-    deletedAt: timestamp("deleted_at"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  },
-  (t) => ({
-    pk: primaryKey({ columns: [t.tenantId, t.name] }),
-    generalSettingsDeletedAtIdx: index("general_settings_deleted_at_idx").on(t.deletedAt),
-    policy: pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-      withCheck: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-    }),
-  }),
-);
+/**
+ * @deprecated 使用 settings 表並以 group='general' 過濾
+ */
+export const generalSettings = settings;
 
-export const enableGeneralSettingRls = sql`
-  ALTER TABLE "general_settings" ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE "general_settings" FORCE ROW LEVEL SECURITY;
-`;
+/**
+ * @deprecated 使用 settingsSchema
+ */
+export const generalSettingsSchema = settingsSchema;
 
-export const generalSettingsSchema = createSelectSchema(generalSettings);
-export const generalSettingsInsertSchema = createInsertSchema(generalSettings);
-export const generalSettingsUpdateSchema = createUpdateSchema(generalSettings);
+/**
+ * @deprecated 使用 settingsInsertSchema
+ */
+export const generalSettingsInsertSchema = settingsInsertSchema;
 
-export type TGeneralSetting = zod.infer<typeof generalSettingsSchema>;
-export type TGeneralSettingInsert = zod.infer<
-  typeof generalSettingsInsertSchema
->;
-export type TGeneralSettingUpdate = zod.infer<
-  typeof generalSettingsUpdateSchema
->;
+/**
+ * @deprecated 使用 settingsUpdateSchema
+ */
+export const generalSettingsUpdateSchema = settingsUpdateSchema;
+
+/**
+ * @deprecated 使用 TSettings
+ */
+export type TGeneralSetting = TSettings;
+
+/**
+ * @deprecated 使用 TSettingsInsert
+ */
+export type TGeneralSettingInsert = TSettingsInsert;
+
+/**
+ * @deprecated 使用 TSettingsUpdate
+ */
+export type TGeneralSettingUpdate = TSettingsUpdate;

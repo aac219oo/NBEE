@@ -1,12 +1,6 @@
 "use server";
 
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import { users } from "@heiso/core/lib/db/schema";
-import { hashPassword, verifyPassword } from "@heiso/core/lib/hash";
-import type { TenantTier } from "@heiso/core/types/tenant";
-import { eq } from "drizzle-orm";
-import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 const passwordSchema = z
@@ -20,104 +14,76 @@ const passwordSchema = z
     path: ["confirmPassword"],
   });
 
-export async function updatePassword(userId: string, data: unknown) {
+/**
+ * 更新密碼
+ * 注意：密碼儲存在 Platform DB，此功能需要 Platform API 支援
+ */
+export async function updatePassword(accountId: string, data: unknown) {
   const result = passwordSchema.safeParse(data);
   if (!result.success) {
     throw new Error("Invalid password format");
   }
 
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
+  // TODO: 呼叫 Platform API 更新密碼
+  // 密碼現在儲存在 Platform DB 的 accounts 表
+  // 需要實作 Platform API: POST /api/platform/accounts/:accountId/update-password
+  console.warn("[updatePassword] Password update requires Platform API implementation");
 
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  const isValid = await verifyPassword(
-    result.data.currentPassword,
-    user.password,
-  );
-  if (!isValid) {
-    throw new Error("Current password is incorrect");
-  }
-
-  const hashedPassword = await hashPassword(result.data.newPassword);
-  await db
-    .update(users)
-    .set({
-      password: hashedPassword,
-      mustChangePassword: false, // Reset the flag after password change
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, userId));
-
-  revalidatePath("/dashboard/account/authentication");
+  throw new Error("Password update requires Platform API implementation");
 }
 
-export async function toggle2FA(userId: string, enabled: boolean) {
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
+/**
+ * 切換 2FA
+ * 注意：2FA 設定儲存在 Platform DB，此功能需要 Platform API 支援
+ */
+export async function toggle2FA(accountId: string, enabled: boolean) {
+  // TODO: 呼叫 Platform API 更新 2FA 設定
+  // 2FA 設定現在儲存在 Platform DB 的 accounts 表
+  console.warn("[toggle2FA] 2FA toggle requires Platform API implementation");
 
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  await db
-    .update(users)
-    .set({
-      twoFactorEnabled: enabled,
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, userId));
-
-  revalidatePath("/dashboard/account/authentication");
+  throw new Error("2FA toggle requires Platform API implementation");
 }
 
-// 查詢會員（含角色），支援以 userId 或 email 查找
+/**
+ * 透過 accountId 查詢成員資格（含角色）
+ */
+export async function findMembershipByAccountId(accountId: string) {
+  const db = await getDynamicDb();
+
+  const membership = await db.query.members.findFirst({
+    columns: {
+      id: true,
+      status: true,
+      role: true,
+      accountId: true,
+    },
+    with: {
+      role: {
+        columns: { id: true, name: true, fullAccess: true }
+      }
+    },
+    where: (t, { and, eq, isNull }) =>
+      and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+  });
+
+  return membership;
+}
+
+/**
+ * @deprecated 使用 findMembershipByAccountId 代替
+ */
 export async function findMembershipByUserOrEmail(params: {
   userId?: string;
   email?: string;
 }) {
-  const { userId, email } = params || {};
-  const db = await getDynamicDb();
+  console.warn('[DEPRECATED] findMembershipByUserOrEmail is deprecated. Use findMembershipByAccountId instead.');
 
-  const membershipById = userId
-    ? await db.query.members.findFirst({
-        columns: {
-          id: true,
-          status: true,
-          isOwner: true,
-          userId: true,
-          email: true,
-        },
-        with: { role: { columns: { id: true, name: true, fullAccess: true } } },
-        where: (t, { and, eq, isNull }) =>
-          and(eq(t.userId, userId), isNull(t.deletedAt)),
-      })
-    : null;
+  const { userId } = params || {};
 
-  const membership =
-    membershipById ??
-    (email
-      ? await db.query.members.findFirst({
-          columns: {
-            id: true,
-            status: true,
-            isOwner: true,
-            userId: true,
-            email: true,
-          },
-          with: {
-            role: { columns: { id: true, name: true, fullAccess: true } },
-          },
-          where: (t, { and, eq, isNull }) =>
-            and(eq(t.email, email!), isNull(t.deletedAt)),
-        })
-      : null);
+  // 嘗試將 userId 作為 accountId 使用
+  if (userId) {
+    return findMembershipByAccountId(userId);
+  }
 
-  return membership;
+  return null;
 }

@@ -1,18 +1,15 @@
-
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import { DEFAULT_ROLES } from '@heiso/core/config/initDefaults';
-import { navigations } from "@heiso/core/lib/db/schema";
+import { navigations, settings } from "@heiso/core/lib/db/schema";
 import { generateNavigationId } from "@heiso/core/lib/id-generator";
 import { eq } from "drizzle-orm";
-import path from "path";
 
 export async function provisionTenantDb(dbUrl: string, modules: string[], tenantId: string) {
     console.log(`[Provisioning] Starting for DB: ${dbUrl} with modules: ${modules.join(', ')}`);
 
     // 1. Connection
-    // Connection must be 'postgres' (not 'drizzle-orm/postgres-js' client type exactly, but the driver)
     const migrationClient = postgres(dbUrl, { max: 1 });
     const db = drizzle(migrationClient);
 
@@ -29,7 +26,6 @@ export async function provisionTenantDb(dbUrl: string, modules: string[], tenant
             // Check if we are inside packages/core already
             const localTarget = join(current, 'drizzle');
             if (existsSync(join(current, 'package.json')) && existsSync(localTarget)) {
-                // Verify package name if needed, or just assume
                 return localTarget;
             }
 
@@ -44,7 +40,7 @@ export async function provisionTenantDb(dbUrl: string, modules: string[], tenant
 
     if (!migrationsFolder) {
         console.error(`[Provisioning] Could not locate 'packages/core/drizzle' from ${process.cwd()}`);
-        return; // Cannot migrate
+        return;
     }
 
     try {
@@ -53,8 +49,6 @@ export async function provisionTenantDb(dbUrl: string, modules: string[], tenant
             await migrate(db, { migrationsFolder });
             console.log(`[Provisioning] Migrations applied successfully.`);
         } catch (e: any) {
-            // Robust check for "Table already exists"
-            // Postgres error code 42P07: relation "..." already exists
             const code = e.code || e.cause?.code;
             const msg = e.message || e.cause?.message || "";
 
@@ -78,21 +72,28 @@ export async function provisionTenantDb(dbUrl: string, modules: string[], tenant
 }
 
 export async function seedDefaults(db: any, modules: string[], tenantId: string) {
-    // Note: Menu seeding has been removed. Menus are now defined statically in dashboard-config.ts
-    // and no longer need to be seeded into the database.
+    // 0. Seed tenantId into settings table
+    console.log('[Provisioning] Seeding tenantId into settings table:', tenantId);
+    await db
+        .insert(settings)
+        .values({
+            name: 'tenantId',
+            value: tenantId,
+            group: 'system',
+        })
+        .onConflictDoNothing();
 
     // 1. Seed 'roles'
     if (modules.includes('role') || process.env.APP_MODE === "core") {
-
         const { roles } = await import('@heiso/core/lib/db/schema');
 
-        const existingRoles = await db.select().from(roles).where(eq(roles.tenantId, tenantId)).limit(1);
+        // Check if any roles exist (each tenant has its own DB now)
+        const existingRoles = await db.select().from(roles).limit(1);
         if (existingRoles.length === 0) {
-            console.log('[Provisioning] Seeding "roles" table for tenant:', tenantId);
+            console.log('[Provisioning] Seeding "roles" table');
             await db.transaction(async (tx: any) => {
                 for (const r of DEFAULT_ROLES) {
                     await tx.insert(roles).values({
-                        tenantId: tenantId,
                         name: r.name,
                         description: r.description,
                         fullAccess: r.fullAccess,
@@ -100,36 +101,29 @@ export async function seedDefaults(db: any, modules: string[], tenantId: string)
                 }
             });
         } else {
-            console.log(`[Provisioning] Roles already exist for tenant ${tenantId}. Skipping.`);
+            console.log(`[Provisioning] Roles already exist. Skipping.`);
         }
     }
 
-    // 3. Seed 'navigations' (Feature Menus - Main Website/Nav)
-    // Check if Main Navigation exists for THIS tenant
-    const existingNav = await db.select().from(navigations).where(
-        // and(eq(navigations.slug, 'main'), eq(navigations.tenantId, tenantId))
-        // Since we are using raw postgres connection without RLS active in this context (usually),
-        // we MUST filter by tenantId to avoid collision in Shared DB.
-        eq(navigations.tenantId, tenantId)
-    ).limit(1);
+    // 2. Seed 'navigations' (Feature Menus - Main Website/Nav)
+    const existingNav = await db.select().from(navigations).limit(1);
 
     if (existingNav.length > 0) {
-        console.log(`[Provisioning] Navigations already exist for tenant ${tenantId}. Skipping.`);
+        console.log(`[Provisioning] Navigations already exist. Skipping.`);
         return;
     }
 
-    console.log('[Provisioning] Seeding "navigations" table for tenant:', tenantId);
+    console.log('[Provisioning] Seeding "navigations" table');
     await db.transaction(async (tx: any) => {
         const navId = generateNavigationId();
-        const PLACEHOLDER_USER_ID = 'system_init';
+        const PLACEHOLDER_ACCOUNT_ID = '00000000-0000-0000-0000-000000000000';
 
         await tx.insert(navigations).values({
             id: navId,
-            userId: PLACEHOLDER_USER_ID,
+            accountId: PLACEHOLDER_ACCOUNT_ID,
             slug: 'main',
             name: 'Main Menu',
             description: 'Default system generated menu',
-            tenantId: tenantId,
         });
     });
 }

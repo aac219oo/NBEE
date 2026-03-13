@@ -2,31 +2,24 @@
 
 import type { Locale } from "@heiso/core/i18n/config";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import { siteSettings } from "@heiso/core/lib/db/schema";
-import { sql } from "drizzle-orm";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
+import { settings } from "@heiso/core/lib/db/schema";
 import type { Settings } from "@heiso/core/types/system";
 import type { SiteSetting } from "../settings/general/page";
 
 async function getSettings(): Promise<Settings> {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
 
-  const settings = await db.query.settings.findMany({
+  const result = await db.query.settings.findMany({
     columns: { name: true, value: true },
-    where: (fields, { and, eq, isNull }) => {
-      const filters = [eq(fields.isKey, false), isNull(fields.deletedAt)];
-      if (tenantId) {
-        filters.push(eq(fields.tenantId, tenantId));
-      }
-      return and(...filters);
-    },
+    where: (fields, { and, eq, isNull }) =>
+      and(eq(fields.isKey, false), isNull(fields.deletedAt)),
   });
-  const result: Record<string, unknown> = {};
-  for (const { name, value } of settings) {
-    result[name] = value;
+
+  const settingsMap: Record<string, unknown> = {};
+  for (const { name, value } of result) {
+    settingsMap[name] = value;
   }
-  return result;
+  return settingsMap;
 }
 
 async function saveSetting() {
@@ -35,27 +28,24 @@ async function saveSetting() {
 
 async function saveSiteSetting(data: SiteSetting) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
 
   await db.transaction(async (tx) => {
     await Promise.all(
       Object.keys(data).map(async (key) => {
         const value = data[key as keyof typeof data];
         await tx
-          .insert(siteSettings)
+          .insert(settings)
           .values({
             name: key,
             value,
-            tenantId,
+            group: "site",
           })
           .onConflictDoUpdate({
-            target: siteSettings.name,
+            target: settings.name,
             set: {
-              name: key,
               value,
+              updatedAt: new Date(),
             },
-            where: sql`${siteSettings.tenantId} = ${tenantId}`,
           });
       }),
     );
@@ -64,25 +54,22 @@ async function saveSiteSetting(data: SiteSetting) {
 
 export { getSettings, saveSetting, saveSiteSetting };
 
-// 將系統預設語言存入 site_settings.language = { default: <locale> }
+// 將系統預設語言存入 settings.language = { default: <locale> }
 export async function saveDefaultLanguage(locale: Locale) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
 
   await db
-    .insert(siteSettings)
+    .insert(settings)
     .values({
       name: "language",
       value: { default: locale },
-      tenantId,
+      group: "site",
     })
     .onConflictDoUpdate({
-      target: siteSettings.name,
+      target: settings.name,
       set: {
-        name: "language",
         value: { default: locale },
+        updatedAt: new Date(),
       },
-      where: sql`${siteSettings.tenantId} = ${tenantId}`,
     });
 }

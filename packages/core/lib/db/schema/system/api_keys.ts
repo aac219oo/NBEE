@@ -1,20 +1,15 @@
 import { generateId } from "@heiso/core/lib/id-generator";
 import { relations } from "drizzle-orm";
 import {
-  boolean,
+  index,
   integer,
   json,
-  pgPolicy,
   pgTable,
   text,
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-import { tenantSchema } from "../utils";
-import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
-import { users } from "../auth";
+import { foreignAccounts } from "../foreign/accounts";
 
 // API Keys table
 export const apiKeys = pgTable(
@@ -23,10 +18,8 @@ export const apiKeys = pgTable(
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$defaultFn(() => generateId()),
-    ...tenantSchema,
-    userId: varchar("user_id", { length: 20 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // TODO: 資料遷移後改回 .notNull()
+    accountId: varchar("account_id", { length: 50 }),
     name: varchar("name", { length: 100 }).notNull(),
     key: varchar("key", { length: 255 }).notNull().unique(),
     rateLimit: json("rate_limit").default({ requests: 100, window: 60 }),
@@ -36,14 +29,10 @@ export const apiKeys = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     deletedAt: timestamp("deleted_at"),
   },
-  (t) => ({
-    policy: pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-      withCheck: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-    }),
-  }),
+  (table) => [
+    index("api_keys_account_id_idx").on(table.accountId),
+    index("api_keys_key_idx").on(table.key),
+  ],
 );
 
 // API Key access log table
@@ -53,13 +42,11 @@ export const apiKeyAccessLogs = pgTable(
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$defaultFn(() => generateId()),
-    ...tenantSchema,
     apiKeyId: varchar("api_key_id", { length: 20 })
       .notNull()
       .references(() => apiKeys.id, { onDelete: "cascade" }),
-    userId: varchar("user_id", { length: 20 })
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // TODO: 資料遷移後改回 .notNull()
+    accountId: varchar("account_id", { length: 50 }),
     endpoint: varchar("endpoint", { length: 255 }).notNull(),
     method: varchar("method", { length: 10 }).notNull(),
     statusCode: integer("status_code").notNull(),
@@ -69,22 +56,11 @@ export const apiKeyAccessLogs = pgTable(
     errorMessage: text("error_message"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (t) => ({
-    policy: pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-      withCheck: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-    }),
-  }),
+  (table) => [
+    index("api_key_access_logs_api_key_id_idx").on(table.apiKeyId),
+    index("api_key_access_logs_account_id_idx").on(table.accountId),
+  ],
 );
-
-export const enableSystemApiKeyRls = sql`
-  ALTER TABLE "api_keys" ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE "api_keys" FORCE ROW LEVEL SECURITY;
-  ALTER TABLE "api_key_access_logs" ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE "api_key_access_logs" FORCE ROW LEVEL SECURITY;
-`;
 
 // Relations for access logs
 export const apiKeyAccessLogsRelations = relations(
@@ -94,48 +70,13 @@ export const apiKeyAccessLogsRelations = relations(
       fields: [apiKeyAccessLogs.apiKeyId],
       references: [apiKeys.id],
     }),
-    user: one(users, {
-      fields: [apiKeyAccessLogs.userId],
-      references: [users.id],
-    }),
   }),
 );
 
-// Zod schemas for access logs
-export const insertApiKeyAccessLogSchema = createInsertSchema(
-  apiKeyAccessLogs,
-  {
-    endpoint: z.string().min(1, "Endpoint is required").max(255),
-    method: z.string().min(1, "Method is required").max(10),
-    statusCode: z.number().int().min(100).max(599),
-    responseTime: z.number().int().min(0),
-    ipAddress: z.string().max(45).optional(),
-    userAgent: z.string().optional(),
-    errorMessage: z.string().optional(),
-  },
-);
-
-export const selectApiKeyAccessLogSchema = createSelectSchema(apiKeyAccessLogs);
-
-// Types for access logs
-export type TApiKeyAccessLog = typeof apiKeyAccessLogs.$inferSelect;
-export type TInsertApiKeyAccessLog = typeof apiKeyAccessLogs.$inferInsert;
-
 // Relations
-export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
-  user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
+export const apiKeysRelations = relations(apiKeys, ({ many }) => ({
+  accessLogs: many(apiKeyAccessLogs),
 }));
-
-// Zod schemas
-export const insertApiKeySchema = createInsertSchema(apiKeys, {
-  name: z
-    .string()
-    .min(1, "Name is required")
-    .max(100, "Name must be less than 100 characters"),
-  expiresAt: z.date().optional(),
-});
-
-export const selectApiKeySchema = createSelectSchema(apiKeys);
 
 // Types
 export type TApiKey = typeof apiKeys.$inferSelect;
@@ -144,7 +85,7 @@ export type TInsertApiKey = typeof apiKeys.$inferInsert;
 // Create API Key data type (without sensitive fields)
 export type TCreateApiKey = Omit<
   TInsertApiKey,
-  "id" | "userId" | "key" | "createdAt" | "updatedAt" | "deletedAt"
+  "id" | "accountId" | "key" | "createdAt" | "updatedAt" | "deletedAt"
 >;
 export type TUpdateApiKey = Partial<
   Pick<TApiKey, "name" | "expiresAt">
@@ -152,3 +93,7 @@ export type TUpdateApiKey = Partial<
 
 // Public API Key type (without sensitive key field)
 export type TPublicApiKey = Omit<TApiKey, "key" | "deletedAt">;
+
+// Access log types
+export type TApiKeyAccessLog = typeof apiKeyAccessLogs.$inferSelect;
+export type TInsertApiKeyAccessLog = typeof apiKeyAccessLogs.$inferInsert;

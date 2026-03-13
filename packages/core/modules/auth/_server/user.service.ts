@@ -4,437 +4,610 @@ import { sendInvite } from "@heiso/core/modules/permission/team/_server/team.ser
 import { type Transaction } from "@heiso/core/lib/db";
 import {
   members,
-  type TUserUpdate,
-  users as usersTable,
+  foreignAccounts,
+  accounts,
 } from "@heiso/core/lib/db/schema";
-import { hashPassword } from "@heiso/core/lib/hash";
 import { generateInviteToken } from "@heiso/core/lib/id-generator";
-import { hasAnyUser } from "@heiso/core/server/services/auth";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 
-export async function getUsers() {
-  const db = await getDynamicDb();
-  const users = await db.query.users.findMany({
-    // where: (table, { isNull }) => isNull(table.deletedAt),
-  });
-  return users;
-}
+/**
+ * 檢查是否為 Core 模式
+ */
+const isCoreMode = () => process.env.APP_MODE === "core";
 
-export async function isUserDeveloper(email: string) {
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    where: (table, { eq }) => eq(table.email, email),
-    with: { developer: true },
-  });
+/**
+ * HiveAccount 類型定義
+ */
+export type HiveAccount = {
+  id: string;
+  email: string;
+  name: string;
+  password: string;
+  active: boolean;
+  avatar?: string | null;
+  lastLoginAt?: Date | null;
+};
 
-  return user?.developer || false;
-}
-
-export async function getUserLoginMethod(email: string) {
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    where: (table, { eq }) => eq(table.email, email),
-    columns: { loginMethod: true },
-  });
-
-  return user?.loginMethod || null;
-}
-
-export async function getLoginMethod(email: string) {
-  const db = await getDynamicDb();
-  // 以 member 取得 roleId，然後查詢 role 的 loginMethod
-  const membership = await db.query.members.findFirst({
-    columns: { roleId: true, isOwner: true },
-    where: (t, { and, eq, isNull }) =>
-      and(eq(t.email, email), isNull(t.deletedAt)),
-  });
-  // role: owner
-  if (membership?.isOwner) return "both";
-
-  // role: other
-  const roleId = membership?.roleId ?? null;
-  if (roleId === null) return null;
-
-  const role = await db.query.roles.findFirst({
-    where: (t, { eq }) => eq(t.id, roleId),
-    columns: { loginMethod: true },
-  });
-
-  return role?.loginMethod || null;
-}
-
-export async function getMemberStatus(email: string) {
-  const db = await getDynamicDb();
-  const member = await db.query.members.findFirst({
-    where: (t, { eq, isNull }) => and(eq(t.email, email), isNull(t.deletedAt)),
-  });
-
-  if (!member) return null;
-
-  return member.status;
-}
-
-// oAuth 已登入且有帳號，更新 user lastLoginAt
-export async function updateLastAt(id: string) {
-  const db = await getDynamicDb();
-  await db
-    .update(usersTable)
-    .set({
-      lastLoginAt: new Date(),
-    })
-    .where(eq(usersTable.id, id));
-}
-
-export async function getMember(params: { id?: string; email?: string }) {
-  const { id, email } = params || {};
-  const db = await getDynamicDb();
-
-  // 若提供 id，先以 userId 查找
-  if (id) {
-    const byId = await db.query.members.findFirst({
-      columns: { userId: true, status: true, email: true },
-      where: (t, { and, eq }) => and(eq(t.userId, id)),
-    });
-
-    if (byId) {
-      await updateLastAt(id);
-      return byId;
-    }
-  }
-
-  // 若提供 email，則以 email 查找
-  if (email) {
-    const byEmail = await db.query.members.findFirst({
-      columns: { userId: true, status: true, email: true },
-      where: (t, { and, eq }) => and(eq(t.email, email)),
-    });
-
-    if (byEmail) {
-      if (byEmail.userId) {
-        await updateLastAt(byEmail.userId);
-      }
-      return byEmail;
-    }
-  }
-
-  // 若皆未提供或皆未找到，回傳 undefined
-  return undefined;
-}
-
-export async function getMemberInviteTokenByEmail(email: string) {
-  const db = await getDynamicDb();
-  const member = await db.query.members.findFirst({
-    columns: { inviteToken: true },
-    where: (t, { and, eq }) => and(eq(t.email, email)),
-  });
-  return member?.inviteToken ?? null;
-}
-
-export async function getUser(email: string) {
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    with: {
-      developer: true,
-    },
-    where: (table, { eq }) => eq(table.email, email),
-  });
-  return user;
-}
-
-// export async function update(id: string, data: TUserUpdate) {
-export async function update(id: string, data: TUserUpdate) {
-  const db = await getDynamicDb();
-  const result = await db
-    .update(usersTable)
-    .set(data)
-    .where(eq(usersTable.id, id));
-  return result;
-}
-
-export async function changePassword(id: string, password: string) {
-  const db = await getDynamicDb();
-  const hashedPassword = await hashPassword(password);
-  await db
-    .update(usersTable)
-    .set({
-      password: hashedPassword,
-      mustChangePassword: false,
-    })
-    .where(eq(usersTable.id, id));
+/**
+ * 動態載入 Hive 服務（僅在非 Core 模式時使用）
+ */
+async function getHiveServices() {
+  const { getAccountWithPassword, checkIsPlatformDeveloper } = await import(
+    "@heiso/hive/services/account"
+  );
+  return { getAccountWithPassword, checkIsPlatformDeveloper };
 }
 
 /**
- * Resend invite email to a owner, but owner invite in team.service.
+ * 取得所有帳號 (用於管理介面)
+ * Core 模式：使用本地 accounts 表
+ * APPS 模式：使用 FDW foreignAccounts
+ */
+export async function getAccounts() {
+  const db = await getDynamicDb();
+
+  if (isCoreMode()) {
+    const result = await db.query.accounts.findMany({
+      where: (t, { isNull }) => isNull(t.deletedAt),
+    });
+    return result;
+  } else {
+    const result = await db.select().from(foreignAccounts);
+    return result;
+  }
+}
+
+/**
+ * 取得成員的登入方式 (透過 role 設定)
+ * @param accountId - Platform account ID
+ */
+export async function getLoginMethod(accountId: string) {
+  // 由於帳號被移到 Platform DB (hive)，目前的架構允許所有人都使用 SSO 與密碼 (both)。
+  return "both";
+}
+
+/**
+ * 取得成員狀態
+ * Core 模式：使用 accounts 表的 status
+ * APPS 模式：使用 Hive 的 account 表
+ * @param accountId - Account ID
+ */
+export async function getMemberStatus(accountId: string) {
+  const db = await getDynamicDb();
+
+  if (isCoreMode()) {
+    const account = await db.query.accounts.findFirst({
+      columns: { status: true },
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+    return account?.status ?? null;
+  } else {
+    const member = await db.query.members.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+    });
+    if (!member) return null;
+    return member.status;
+  }
+}
+
+/**
+ * 透過 accountId 取得成員資訊
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 Hive 的 account 表
+ * @param accountId - Account ID
+ */
+export async function getMember(accountId: string) {
+  const db = await getDynamicDb();
+
+  if (isCoreMode()) {
+    const account = await db.query.accounts.findFirst({
+      columns: {
+        id: true,
+        status: true,
+        roleId: true,
+        role: true,
+      },
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+
+    if (!account) return null;
+
+    // 返回與 members 表相容的格式
+    return {
+      id: account.id,
+      accountId: account.id,
+      status: account.status,
+      roleId: account.roleId,
+      role: account.role,
+    };
+  } else {
+    const member = await db.query.members.findFirst({
+      columns: {
+        id: true,
+        accountId: true,
+        status: true,
+        roleId: true,
+        role: true,
+      },
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+    });
+
+    return member ?? null;
+  }
+}
+
+/**
+ * 透過 accountId 取得成員的邀請 token
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 Hive 的 account 表
+ * @param accountId - Account ID
+ */
+export async function getMemberInviteToken(accountId: string) {
+  const db = await getDynamicDb();
+
+  if (isCoreMode()) {
+    const account = await db.query.accounts.findFirst({
+      columns: { inviteToken: true },
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+    return account?.inviteToken ?? null;
+  } else {
+    const member = await db.query.members.findFirst({
+      columns: { inviteToken: true },
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+    });
+    return member?.inviteToken ?? null;
+  }
+}
+
+/**
+ * 取得帳號資訊
+ * Core 模式：使用本地 accounts 表
+ * APPS 模式：使用 FDW foreignAccounts
+ * @param accountId - Account ID
+ */
+export async function getAccount(accountId: string) {
+  const db = await getDynamicDb();
+
+  if (isCoreMode()) {
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+    return account ?? null;
+  } else {
+    const [account] = await db
+      .select()
+      .from(foreignAccounts)
+      .where(eq(foreignAccounts.id, accountId))
+      .limit(1);
+    return account ?? null;
+  }
+}
+
+/**
+ * 重寄邀請 email 給成員
+ * @param accountId - Platform account ID
  */
 export async function resendInviteByEmail(email: string) {
-  const db = await getDynamicDb();
-  const member = await db.query.members.findFirst({
-    where: (t, { eq, isNull }) => and(eq(t.email, email), isNull(t.deletedAt)),
-  });
-
-  if (!member) {
-    throw new Error("Member not found");
+  const account = await getAccountByEmail(email);
+  if (!account) {
+    throw new Error("Account not found");
   }
-
-  const inviteToken = generateInviteToken();
-  const inviteTokenExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
-
-  await db
-    .update(members)
-    .set({
-      inviteToken,
-      tokenExpiredAt: inviteTokenExpiresAt,
-    })
-    .where(eq(members.id, member.id))
-    .returning();
-
-  const result = await sendInvite({
-    email: member.email,
-    inviteToken,
-    isOwner: member.isOwner,
-  });
-
-  return result;
+  return resendInviteByAccountId(account.id);
 }
 
-/**
- * Ensure a member has a valid invite token without sending email.
- * - If member does not exist, create one with token and expiry.
- * - If member exists but token missing/expired, refresh the token.
- * - Returns the invite token.
- */
-export async function ensureInviteTokenSilently(email: string,  tenantId?: string) {
+export async function resendInviteByAccountId(accountId: string) {
   const db = await getDynamicDb();
+  const inviteToken = generateInviteToken();
+  const inviteExpiredAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
 
-  // Resolve tenantId if not provided (fallback to RLS context context query, but explicit is better)
-  if (!tenantId) {
-    try {
-        const tenantIdResult = await db.execute(sql`SELECT current_setting('app.current_tenant_id', true) as tenant_id`);
-        tenantId = tenantIdResult[0]?.tenant_id as string;
-    } catch(e) { /* Ignore if simple client */ }
-  }
-
-  if (!tenantId) {
-    console.error("[DEBUG] Tenant context missing in ensureInviteTokenSilently!");
-    throw new Error("Tenant context missing during member creation");
-  }
-
-  // Explicitly filter by tenantId (critical for Superuser which ignores RLS)
-  const member = await db.query.members.findFirst({
-    where: (t: any, { and, eq, isNull }: any) =>
-      and(
-        eq(t.email, email),
-        isNull(t.deletedAt),
-        eq(t.tenantId, tenantId)
-      ),
-  });
-
-  const now = Date.now();
-  const needsNewToken =
-    !member?.inviteToken ||
-    !member?.tokenExpiredAt ||
-    member.tokenExpiredAt.getTime() < now;
-
-  if (!member) {
-    const inviteToken = generateInviteToken();
-    const inviteTokenExpiresAt = new Date(now + 1000 * 60 * 60 * 24 * 7); // 7 days
-
-    // Check if this is the first member of the tenant (Explicit filter)
-    const existingMember = await db.query.members.findFirst({
-      columns: { id: true },
-      where: (t: any, { eq, isNull }: any) =>
-        and(eq(t.tenantId, tenantId), isNull(t.deletedAt)),
+  if (isCoreMode()) {
+    // Core 模式：使用 accounts 表
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
     });
-    const isOwner = !existingMember;
 
-    console.log("[DEBUG] ensureInviteTokenSilently: Current Tenant:", tenantId);
-    console.log("[DEBUG] Attempting to insert member with tenantId:", tenantId, "isOwner:", isOwner);
+    if (!account) {
+      throw new Error("Account not found");
+    }
 
-    const [created] = await db
-      .insert(members)
-      .values({
-        tenantId,
-        isOwner,
-        email,
+    await db
+      .update(accounts)
+      .set({
         inviteToken,
-        tokenExpiredAt: inviteTokenExpiresAt,
+        inviteExpiredAt,
+        updatedAt: new Date(),
       })
-      .returning({ inviteToken: members.inviteToken });
-    return created?.inviteToken ?? null;
-  }
+      .where(eq(accounts.id, accountId));
 
-  if (needsNewToken) {
-    const inviteToken = generateInviteToken();
-    const inviteTokenExpiresAt = new Date(now + 1000 * 60 * 60 * 24 * 7);
-    const [updated] = await db
+    const result = await sendInvite({
+      email: account.email,
+      inviteToken,
+      isOwner: account.role === "owner",
+    });
+
+    return result;
+  } else {
+    // APPS 模式：使用 Hive 的 account 表
+    const member = await db.query.members.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+    });
+
+    if (!member) {
+      throw new Error("Member not found");
+    }
+
+    const account = await getAccount(accountId);
+    if (!account?.email) {
+      throw new Error("Account not found");
+    }
+
+    await db
       .update(members)
       .set({
         inviteToken,
-        tokenExpiredAt: inviteTokenExpiresAt,
-        status: "invited",
+        inviteExpiredAt,
+        updatedAt: new Date(),
       })
-      .where(eq(members.id, member.id))
-      .returning({ inviteToken: members.inviteToken });
-    return updated?.inviteToken ?? null;
-  }
+      .where(eq(members.id, member.id));
 
-  return member.inviteToken;
+    const result = await sendInvite({
+      email: account.email,
+      inviteToken,
+      isOwner: member.role === "owner",
+    });
+
+    return result;
+  }
 }
 
 /**
- * 首次登入：確保建立/刷新 member 並將狀態設為 review，綁定 userId。
- * - 行為仿照 team invite 的儲存（生成/刷新 inviteToken 與到期時間）但不寄信
+ * 確保帳號有有效的邀請 token（不發送 email）
+ * - 若 token 遺失或過期，刷新 token
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 Hive 的 account 表
+ * @param accountId - Account ID
  */
-export async function ensureMemberReviewOnFirstLogin(
-  email: string,
-  userId?: string,
-  tenantId?: string,
-  tx?: Transaction,
-) {
-  const db = tx ?? await getDynamicDb();
-  const execute = async (db: Transaction) => {
-    console.log("[DEBUG] ensureMemberReviewOnFirstLogin: Transaction started (or reused). TenantId:", tenantId);
+export async function ensureInviteTokenSilently(accountId: string) {
+  const db = await getDynamicDb();
+  const now = Date.now();
 
-    // 1. Set RLS Context inside Transaction
-    if (tenantId) {
-      await db.execute(
-        sql`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`,
-      );
-      console.log("[DEBUG] RLS Context Set for tenant:", tenantId);
-    } else {
-      console.warn("[DEBUG] No tenantId provided to ensureMemberReviewOnFirstLogin!");
+  if (isCoreMode()) {
+    // Core 模式：使用 accounts 表
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+
+    if (!account) return null;
+
+    const needsNewToken =
+      !account.inviteToken ||
+      !account.inviteExpiredAt ||
+      account.inviteExpiredAt.getTime() < now;
+
+    if (needsNewToken) {
+      const inviteToken = generateInviteToken();
+      const inviteExpiredAt = new Date(now + 1000 * 60 * 60 * 24 * 7);
+
+      const [updated] = await db
+        .update(accounts)
+        .set({
+          inviteToken,
+          inviteExpiredAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(accounts.id, accountId))
+        .returning({ inviteToken: accounts.inviteToken });
+
+      return updated?.inviteToken ?? null;
     }
 
-    // 2. Ensure Token (Pass db, tenantId)
-    const token = await ensureInviteTokenSilently(email, tenantId);
-    console.log("[DEBUG] ensureInviteTokenSilently result:", token);
-
-    // Fetch the member NOW so we can use its properties
+    return account.inviteToken;
+  } else {
+    // APPS 模式：使用 Hive 的 account 表
     const member = await db.query.members.findFirst({
       where: (t, { and, eq, isNull }) =>
-        and(
-          eq(t.email, email),
-          isNull(t.deletedAt),
-          eq(t.tenantId, tenantId!) // Explicitly filter
-        ),
+        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
     });
-    
-    if (!member) return null; // Should not happen as ensured above
 
-    // Check if tenant has any owner (Explicit Filter)
-    const existingOwner = await db.query.members.findFirst({
-      where: (t, { and, eq, isNull }) =>
-        and(
-          eq(t.isOwner, true),
-          isNull(t.deletedAt),
-          eq(t.tenantId, tenantId!) // Explicitly filter by tenantId
-        ),
+    const needsNewToken =
+      !member?.inviteToken ||
+      !member?.inviteExpiredAt ||
+      member.inviteExpiredAt.getTime() < now;
+
+    if (!member) {
+      const inviteToken = generateInviteToken();
+      const inviteExpiredAt = new Date(now + 1000 * 60 * 60 * 24 * 7);
+
+      // 檢查是否為第一個成員（自動設為 owner）
+      const existingMember = await db.query.members.findFirst({
+        columns: { id: true },
+        where: (t, { isNull }) => isNull(t.deletedAt),
+      });
+      const shouldBeOwner = !existingMember;
+
+      const [created] = await db
+        .insert(members)
+        .values({
+          accountId,
+          role: shouldBeOwner ? "owner" : "member",
+          inviteToken,
+          inviteExpiredAt,
+        })
+        .returning({ inviteToken: members.inviteToken });
+
+      return created?.inviteToken ?? null;
+    }
+
+    if (needsNewToken) {
+      const inviteToken = generateInviteToken();
+      const inviteExpiredAt = new Date(now + 1000 * 60 * 60 * 24 * 7);
+
+      const [updated] = await db
+        .update(members)
+        .set({
+          inviteToken,
+          inviteExpiredAt,
+          status: "invited",
+          updatedAt: new Date(),
+        })
+        .where(eq(members.id, member.id))
+        .returning({ inviteToken: members.inviteToken });
+
+      return updated?.inviteToken ?? null;
+    }
+
+    return member.inviteToken;
+  }
+}
+
+/**
+ * 首次登入：設定帳號狀態為 active
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 Hive 的 account 表
+ * @param accountId - Account ID
+ * @param tx - 可選的 transaction
+ */
+export async function ensureMemberOnFirstLogin(
+  accountId: string,
+  tx?: Transaction,
+) {
+  if (isCoreMode()) {
+    // Core 模式：更新 accounts 表
+    const db = tx ?? (await getDynamicDb());
+
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+
+    if (!account) return null;
+
+    // 檢查是否有 owner
+    const existingOwner = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.role, "owner"), isNull(t.deletedAt)),
       columns: { id: true },
     });
 
     const shouldBeOwner = !existingOwner;
-    let assignedRoleId = member.roleId;
+    let assignedRoleId = account.roleId;
 
-    if ((shouldBeOwner || member.isOwner) && !assignedRoleId) {
-       // Find Admin Role (assigned to Owners)
-       const ownerRole = await db.query.roles.findFirst({
-           where: (t, { and, eq, isNull }) => and(eq(t.name, 'Admin'), eq(t.tenantId, tenantId!), isNull(t.deletedAt)),
-           columns: { id: true }
-       });
-       if (ownerRole) {
-           assignedRoleId = ownerRole.id;
-       }
+    // 若為 owner 且沒有角色，指派 Admin 角色
+    if ((shouldBeOwner || account.role === "owner") && !assignedRoleId) {
+      const adminRole = await db.query.roles.findFirst({
+        where: (t, { eq, isNull }) =>
+          and(eq(t.name, "Admin"), isNull(t.deletedAt)),
+        columns: { id: true },
+      });
+      if (adminRole) {
+        assignedRoleId = adminRole.id;
+      }
     }
 
     const [updated] = await db
-      .update(members)
+      .update(accounts)
       .set({
-        userId: member.userId ?? userId,
         roleId: assignedRoleId,
-        status: "joined",
-        isOwner: member.isOwner || shouldBeOwner,
+        status: "active",
+        role: account.role === "owner" || shouldBeOwner ? "owner" : account.role,
+        joinedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(members.id, member.id))
+      .where(eq(accounts.id, accountId))
       .returning({
-        userId: members.userId,
-        status: members.status,
-        email: members.email,
-        isOwner: members.isOwner,
+        id: accounts.id,
+        status: accounts.status,
+        role: accounts.role,
       });
 
-    return updated ?? null;
-  };
+    return updated
+      ? { ...updated, accountId: updated.id }
+      : null;
+  } else {
+    // APPS 模式：使用 Hive 的 account 表
+    const db = tx ?? (await getDynamicDb());
 
-  if (tx) {
-    return await execute(tx);
+    const execute = async (database: Transaction) => {
+      // 確保有 invite token
+      await ensureInviteTokenSilently(accountId);
+
+      // 取得成員
+      const member = await database.query.members.findFirst({
+        where: (t, { and, eq, isNull }) =>
+          and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+      });
+
+      if (!member) return null;
+
+      // 檢查是否有 owner
+      const existingOwner = await database.query.members.findFirst({
+        where: (t, { and, eq, isNull }) =>
+          and(eq(t.role, "owner"), isNull(t.deletedAt)),
+        columns: { id: true },
+      });
+
+      const shouldBeOwner = !existingOwner;
+      let assignedRoleId = member.roleId;
+
+      // 若為 owner 且沒有角色，指派 Admin 角色
+      if ((shouldBeOwner || member.role === "owner") && !assignedRoleId) {
+        const adminRole = await database.query.roles.findFirst({
+          where: (t, { and, eq, isNull }) =>
+            and(eq(t.name, "Admin"), isNull(t.deletedAt)),
+          columns: { id: true },
+        });
+        if (adminRole) {
+          assignedRoleId = adminRole.id;
+        }
+      }
+
+      const [updated] = await database
+        .update(members)
+        .set({
+          roleId: assignedRoleId,
+          status: "active",
+          role:
+            member.role === "owner" || shouldBeOwner ? "owner" : member.role,
+          updatedAt: new Date(),
+        })
+        .where(eq(members.id, member.id))
+        .returning({
+          id: members.id,
+          accountId: members.accountId,
+          status: members.status,
+          role: members.role,
+        });
+
+      return updated ?? null;
+    };
+
+    if (tx) {
+      return await execute(tx);
+    }
+
+    // @ts-ignore
+    return await db.transaction(execute);
   }
-
-  // @ts-ignore
-  return await db.transaction(execute);
 }
 
 /**
- * Check if the current tenant has any owner.
- * Used for detecting initial tenant state.
+ * 檢查當前 tenant 是否有 owner
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 Hive 的 account 表
  */
-export async function checkTenantHasOwner(tenantId?: string) {
+export async function checkTenantHasOwner() {
   const db = await getDynamicDb();
-  if (!tenantId) {
-    try {
-        // If no tenantId explicitly passed, try to get it from current setting (unlikely to work in detached server action without context)
-        const tenantIdResult = await db.execute(sql`SELECT current_setting('app.current_tenant_id', true) as tenant_id`);
-        tenantId = tenantIdResult[0]?.tenant_id as string;
-    } catch(e) { /* Ignore */ }
-  }
 
-  if (!tenantId) return false;
-
-  const result = await db.transaction(async (tx) => {
-    // Set RLS context for this check
-    await tx.execute(
-      sql`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`,
-    );
-
-    const owner = await tx.query.members.findFirst({
-      where: (t, { and, eq, isNull }) =>
-        and(
-          eq(t.isOwner, true),
-          isNull(t.deletedAt),
-          eq(t.tenantId, tenantId!) // Explicitly filter
-        ),
-      columns: { id: true, tenantId: true },
+  if (isCoreMode()) {
+    const owner = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.role, "owner"), isNull(t.deletedAt)),
+      columns: { id: true },
     });
     return !!owner;
-  });
-
-  return result;
+  } else {
+    const owner = await db.query.members.findFirst({
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.role, "owner"), isNull(t.deletedAt)),
+      columns: { id: true },
+    });
+    return !!owner;
+  }
 }
 
+/**
+ * 透過 email 取得帳號
+ */
+export async function getAccountByEmail(email: string) {
+  const db = await getDynamicDb();
 
-// export async function findRoles(userId: string) {
-//   const result = await db
-//     .select({
-//       id: roles.id,
-//       name: roles.name,
-//     })
-//     .from(userRoles)
-//     .innerJoin(roles, eq(userRoles.roleId, roles.id))
-//     .where(eq(userRoles.userId, userId));
+  if (isCoreMode()) {
+    // Core 模式：使用本地 accounts 表
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq }) => eq(t.email, email),
+    });
+    return account ?? null;
+  } else {
+    // APPS 模式：使用 FDW foreignAccounts
+    const account = await db.query.foreignAccounts.findFirst({
+      where: eq(foreignAccounts.email, email),
+    });
+    return account ?? null;
+  }
+}
 
-//   return result;
-// }
+/**
+ * 透過 email 取得帳號 (包含密碼)
+ * Core 模式：使用本地 accounts 表
+ * APPS 模式：委派給 hive 層的服務函式
+ */
+export async function getAccountWithPasswordByEmail(
+  email: string,
+): Promise<HiveAccount | null> {
+  if (isCoreMode()) {
+    // Core 模式：使用本地 accounts 表
+    const db = await getDynamicDb();
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) =>
+        and(eq(t.email, email), isNull(t.deletedAt)),
+    });
 
-// export async function getCustomPermissions(userId: string) {
-//   const result = await db
-//     .select({
-//       resource: permissions.resource,
-//       action: permissions.action,
-//     })
-//     .from(userPermissions)
-//     .innerJoin(permissions, eq(userPermissions.permissionId, permissions.id))
-//     .where(eq(userPermissions.userId, userId));
+    if (!account) return null;
 
-//   return result;
-// }
+    return {
+      id: account.id,
+      email: account.email,
+      name: account.name,
+      password: account.password,
+      active: account.active,
+      avatar: account.avatar,
+      lastLoginAt: account.lastLoginAt,
+    };
+  } else {
+    // APPS 模式：使用 Hive 服務
+    const { getAccountWithPassword } = await getHiveServices();
+    return getAccountWithPassword(email);
+  }
+}
+
+/**
+ * 檢查是否為 Developer (Owner)
+ * Core 模式：使用本地 accounts 表檢查 role === 'owner'
+ * APPS 模式：委派給 hive 層的服務函式
+ */
+export async function isUserDeveloper(accountId: string): Promise<boolean> {
+  if (isCoreMode()) {
+    // Core 模式：檢查本地 accounts 表的 role
+    const db = await getDynamicDb();
+    const account = await db.query.accounts.findFirst({
+      columns: { role: true },
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+
+    return account?.role === "owner";
+  } else {
+    // APPS 模式：使用 Hive 服務
+    const { checkIsPlatformDeveloper } = await getHiveServices();
+    return checkIsPlatformDeveloper(accountId);
+  }
+}
+
+/**
+ * 取得帳號本身的登入驗證方式 (例如是否為 OAuth)
+ */
+export async function getUserLoginMethod(accountId: string) {
+  return null;
+}

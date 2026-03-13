@@ -32,6 +32,18 @@ export default async function DashboardLayout({
         path: "/authentication",
         icon: "shield-user",
       },
+      {
+        id: "team",
+        title: t("navigation.team"),
+        path: "/team",
+        icon: "users-round",
+      },
+      {
+        id: "role",
+        title: t("navigation.role"),
+        path: "/role",
+        icon: "square-user-round",
+      },
     ],
   };
 

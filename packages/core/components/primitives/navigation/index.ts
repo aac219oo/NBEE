@@ -9,7 +9,7 @@ export interface NavigationItem {
   link: string;
   targetBlank?: boolean;
   group?: string | null;
-  order: number | null;
+  sortOrder: number | null;
   parentId?: string | null;
   children?: NavigationItem[];
   enabled?: boolean;
@@ -19,7 +19,7 @@ export interface NavigationItem {
 export interface UpdateInstruction {
   id: string;
   parentId: string | null | undefined;
-  order: number;
+  sortOrder: number;
 }
 
 export * from "./navigation-form";

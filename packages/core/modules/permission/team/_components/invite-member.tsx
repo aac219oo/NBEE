@@ -52,7 +52,7 @@ export function InviteMember({
   const inviteFormSchema = z.object({
     name: z.string().optional(),
     email: z.string().min(1, t("form.validation.emailInvalid")),
-    role: z.string().min(1, t("form.validation.roleInvalid")),
+    roleId: z.string().min(1, t("form.validation.roleInvalid")),
   });
 
   type InviteFormValues = z.infer<typeof inviteFormSchema>;
@@ -62,7 +62,7 @@ export function InviteMember({
     defaultValues: {
       name: "",
       email: "",
-      role: "",
+      roleId: "",
     },
   });
 
@@ -73,7 +73,7 @@ export function InviteMember({
       try {
         await invite({
           email: data.email.replace(/\s/g, ""),
-          role: data.role,
+          roleId: data.roleId,
           name: data.name?.trim(),
         });
         toast.success(t("form.success", { email: data.email }));
@@ -140,7 +140,7 @@ export function InviteMember({
             />
             <FormField
               control={form.control}
-              name="role"
+              name="roleId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel required>{t("form.role")}</FormLabel>

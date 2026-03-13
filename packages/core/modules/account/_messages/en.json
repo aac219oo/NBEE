@@ -5,11 +5,13 @@
     },
     "navigation": {
       "preferences": "Preferences",
-      "authentication": "Authentication"
+      "authentication": "Authentication",
+      "team": "Team",
+      "role": "Role"
     },
     "userMenu": {
       "dashboard": "Dashboard",
-      "accountSettings": "Account Settings",
+      "accountSettings": "Settings",
       "theme": "Theme",
       "homePage": "Home Page",
       "logOut": "Log out",

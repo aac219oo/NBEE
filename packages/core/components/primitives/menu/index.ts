@@ -4,7 +4,7 @@ export interface MenuItem {
   path: string | null;
   group?: string | null;
   icon?: string | null;
-  order: number | null;
+  sortOrder: number | null;
   parentId?: string | null;
   children?: MenuItem[];
 }

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { MemberList } from "./_components/member-list";
 import { getRoles } from "./_server/role.service";
 import { getTeamMembers } from "./_server/team.service";
+import { getMenus } from "../../dev-center/permission/_server/menu.service";
 
 export default async function Team() {
   return (
@@ -17,6 +18,10 @@ export default async function Team() {
 }
 
 async function TeamManagement() {
-  const [members, roles] = await Promise.all([getTeamMembers(), getRoles()]);
-  return <MemberList data={members} roles={roles} />;
+  const [members, roles, menus] = await Promise.all([
+    getTeamMembers(), 
+    getRoles(),
+    getMenus()
+  ]);
+  return <MemberList data={members} roles={roles} menus={menus} />;
 }

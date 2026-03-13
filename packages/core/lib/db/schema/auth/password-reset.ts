@@ -1,5 +1,4 @@
 import { generateId } from "@heiso/core/lib/id-generator";
-import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -7,35 +6,28 @@ import {
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { users } from "./user";
 
+/**
+ * userPasswordReset - 密碼重設 token
+ *
+ * accountId 關聯到 Platform.accounts (透過 FDW)
+ */
 export const userPasswordReset = pgTable(
   "user_password_reset",
   {
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$default(() => generateId()),
-    userId: varchar("user_id", { length: 20 })
-      .references(() => users.id, { onDelete: "cascade" })
-      .notNull(),
+    // TODO: 資料遷移後改回 .notNull()
+    accountId: varchar("account_id", { length: 50 }),
     token: varchar("token", { length: 100 }).notNull(),
     used: boolean("used").default(false),
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
-    index("user_password_reset_user_id_idx").on(table.userId),
+    index("user_password_reset_account_id_idx").on(table.accountId),
     index("user_password_reset_valid_idx").on(table.used, table.expiresAt),
     index("user_password_reset_token_idx").on(table.token),
   ],
-);
-
-export const userPasswordResetRelations = relations(
-  userPasswordReset,
-  ({ one }) => ({
-    user: one(users, {
-      fields: [userPasswordReset.userId],
-      references: [users.id],
-    }),
-  }),
 );

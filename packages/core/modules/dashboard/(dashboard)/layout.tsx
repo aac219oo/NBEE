@@ -60,8 +60,8 @@ async function OrgLayoutWrap({
   // }
   const hasFullAccess =
     membership.isDeveloper === true ||
-    membership.isOwner === true ||
-    membership.role?.fullAccess === true;
+    membership.role === 'owner' ||
+    (membership.role as any)?.fullAccess === true;
 
   // Get translations
   const t = await getTranslations("dashboard.userMenu");

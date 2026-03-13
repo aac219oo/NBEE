@@ -1,7 +1,7 @@
 import { verifyPassword } from "@heiso/core/lib/hash";
 import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { getUser } from "./user.service";
+import { getAccountByEmail, getAccountWithPasswordByEmail, isUserDeveloper } from "./user.service";
 
 declare module "next-auth" {
   interface Session {
@@ -64,15 +64,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         // Handle OTP verification flow
         if (credentials?.otpVerified === "true" && credentials?.userId) {
-          const user = await getUser(credentials.email as string);
-          if (!user || user.id !== credentials.userId) {
+          const account = await getAccountByEmail(credentials.email as string);
+          if (!account || account.id !== credentials.userId) {
             throw new InvalidLoginError();
           }
-          const isDeveloper = !!user?.developer;
+          const isDeveloper = await isUserDeveloper(account.id);
           return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
+            id: account.id,
+            name: account.name ?? "",
+            email: account.email,
             isDeveloper,
           };
         }
@@ -85,19 +85,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const { username, password } = <{ username: string; password: string }>(
           credentials
         );
-        const user = await getUser(username);
+        const account = await getAccountWithPasswordByEmail(username);
 
-        if (!user) {
+        if (!account || !account.password) {
           throw new InvalidLoginError();
         }
 
-        const isMatch = await verifyPassword(password, user.password);
+        const isMatch = await verifyPassword(password, account.password);
         if (!isMatch) {
           throw new InvalidLoginError();
         }
 
-        const isDeveloper = !!user?.developer;
-        return { id: user.id, name: user.name, email: user.email, isDeveloper };
+        const isDeveloper = await isUserDeveloper(account.id);
+        return { 
+          id: account.id, 
+          name: account.name ?? "", 
+          email: account.email, 
+          isDeveloper 
+        };
       },
     }),
   ],

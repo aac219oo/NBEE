@@ -32,13 +32,13 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import type { Member } from "../_server/team.service";
+import { MemberStatus, type Member } from "../types";
 import { updateMember } from "../_server/team.service";
-import { MemberStatus, MemberUser } from "./member-list";
+import { MemberUser } from "./member-list";
 
 const updateMemberFormSchema = z.object({
   roleId: z.string(),
-  isOwner: z.boolean(),
+  role: z.enum(['owner', 'admin', 'member']),
   status: z.string(),
 });
 
@@ -63,26 +63,30 @@ export function EditMember({
   const [isLoading, setIsLoading] = useState(false);
   const isRole = roles.find((role) => role.id === member.roleId)?.id;
 
+  // member.role is the TRole relation, but TMember also has a role column
+  // Use type assertion to access the underlying column value
+  const memberRoleValue = ((member as any).role as 'owner' | 'admin' | 'member' | null) || 'member';
+
   const form = useForm<UpdateMemberFormValues>({
     resolver: zodResolver(updateMemberFormSchema),
     defaultValues: {
       roleId: isRole || undefined,
-      isOwner: member.isOwner, // 這個只是用來一開始的狀態
+      role: typeof memberRoleValue === 'string' ? memberRoleValue : 'member', // 這個只是用來一開始的狀態
       status: member.status || "active", // 預設為啟用狀態
     },
   });
 
   const onSubmit = async (values: UpdateMemberFormValues) => {
     setIsLoading(true);
-    const isOwner = values.roleId === MemberStatus.Owner;
+    const isOwner = values.role === 'owner';
 
     try {
       await updateMember({
         id: member.id,
         data: {
           roleId: isOwner ? null : values.roleId,
-          isOwner: isOwner,
-          status: values.status,
+          role: values.role,
+          status: values.status as 'invited' | 'active' | 'inactive' | 'suspended',
         },
       });
       toast.success(t("successfully"));
@@ -139,8 +143,8 @@ export function EditMember({
                   >
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        {form.watch("isOwner") ? (
-                          <span>{MemberStatus.Owner}</span>
+                        {form.watch("role") === 'owner' ? (
+                          <span>Owner</span>
                         ) : (
                           <SelectValue placeholder={t("selectRole")} />
                         )}
@@ -166,18 +170,18 @@ export function EditMember({
                   <FormLabel>{t("status")}</FormLabel>
                   <div className="space-y-0.5 rounded-lg border py-3 px-4 w-full flex items-center justify-between">
                     <div className="text-sm text-muted-foreground">
-                      {field.value === MemberStatus.Joined
+                      {field.value === MemberStatus.Active
                         ? t("statuses.activate")
                         : t("statuses.deactivate")}
                     </div>
                     <FormControl>
                       <Switch
-                        checked={field.value === MemberStatus.Joined}
+                        checked={field.value === MemberStatus.Active}
                         onCheckedChange={(checked) => {
                           field.onChange(
                             checked
-                              ? MemberStatus.Joined
-                              : MemberStatus.Disabled,
+                              ? MemberStatus.Active
+                              : MemberStatus.Suspended,
                           );
                         }}
                         disabled={member.status === MemberStatus.Invited}

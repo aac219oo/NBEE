@@ -1,40 +1,59 @@
 "use server";
 
-import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import {
-  type TUserUpdate,
-  users as usersTable,
-} from "@heiso/core/lib/db/schema";
-import { eq } from "drizzle-orm";
+  getAccountByEmail as getAccountByEmailAdapter,
+  getAccountById,
+  updateAccount,
+} from "@heiso/core/lib/platform/account-adapter";
+import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
+import type { TAccount } from "@heiso/core/lib/db/schema";
 
+// Re-export adapter functions
+export { getAccountByEmailAdapter as getAccountByEmail };
+
+/**
+ * Get all accounts
+ * Core mode: From accounts table
+ * CMS mode: From foreignAccounts (FDW) + members
+ */
 export async function getUsers() {
   const db = await getDynamicDb();
-  const users = await db.query.users.findMany({
-    // where: (table, { isNull }) => isNull(table.deletedAt),
-  });
-  return users;
+
+  if (process.env.APP_MODE === "core") {
+    // Core 模式：直接查詢 accounts 表
+    return await db.query.accounts.findMany({
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        active: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  } else {
+    // APPS 模式：使用 FDW
+    // @ts-ignore - foreignAccounts Drizzle query type issue
+    const accounts = await db.query.foreignAccounts.findMany({
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        active: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return accounts;
+  }
 }
 
 export async function getUserById(id: string) {
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    columns: {
-      id: true,
-      name: true,
-      email: true,
-      avatar: true,
-      active: true,
-      lastLoginAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    with: {
-      developer: true,
-      membership: true,
-    },
-    where: (table, { and, eq }) => and(eq(table.id, id)),
-  });
-  return user;
+  return await getAccountById(id);
 }
 
 export async function getInvitation(token: string) {
@@ -42,25 +61,18 @@ export async function getInvitation(token: string) {
   const invitation = await db.query.members.findFirst({
     columns: {
       id: true,
-      email: true,
+      accountId: true,
     },
-    where: (table, { and, eq }) => and(eq(table.inviteToken, token)),
+    where: (table, { eq }) => eq(table.inviteToken, token),
   });
 
-  if (!invitation)
+  if (!invitation || !invitation.accountId)
     return {
       invitation: null,
       user: null,
     };
 
-  const user = await db.query.users.findFirst({
-    columns: {
-      id: true,
-      email: true,
-    },
-    where: (table, { eq }) => eq(table.email, invitation.email),
-  });
-
+  const user = await getAccountById(invitation.accountId);
   return {
     invitation,
     user,
@@ -68,100 +80,23 @@ export async function getInvitation(token: string) {
 }
 
 export async function getAccount(id: string) {
-  const db = await getDynamicDb();
-  const account = await db.query.users.findFirst({
-    columns: {
-      id: true,
-      name: true,
-      email: true,
-      avatar: true,
-      active: true,
-      lastLoginAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    with: {
-      developer: true,
-      membership: {
-        columns: {
-          id: true,
-          isOwner: true,
-        },
-        with: {
-          role: {
-            columns: {
-              id: true,
-              name: true,
-              fullAccess: true,
-            },
-          },
-        },
-      },
-    },
-    where: (table, { and, eq }) => and(eq(table.id, id)),
-  });
-  return account;
-}
-
-export async function getAccountByEmail(email: string) {
-  const db = await getDynamicDb();
-  const account = await db.query.users.findFirst({
-    columns: {
-      id: true,
-      name: true,
-      email: true,
-      avatar: true,
-      active: true,
-      lastLoginAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    with: {
-      developer: true,
-      membership: {
-        columns: {
-          id: true,
-          isOwner: true,
-        },
-        with: {
-          role: {
-            columns: {
-              id: true,
-              name: true,
-              fullAccess: true,
-            },
-          },
-        },
-      },
-    },
-    where: (table, { eq }) => eq(table.email, email),
-  });
-  return account;
+  return await getAccountById(id);
 }
 
 export async function getUser(email: string) {
-  const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    columns: {
-      id: true,
-      name: true,
-      email: true,
-      avatar: true,
-      active: true,
-      lastLoginAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-    where: (table, { eq }) => eq(table.email, email),
-  });
-  return user;
+  return await getAccountByEmailAdapter(email);
 }
 
-export async function update(id: string, data: TUserUpdate) {
-  const db = await getDynamicDb();
-  const result = await db
-    .update(usersTable)
-    .set(data)
-    .where(eq(usersTable.id, id));
-  return result;
+/**
+ * Update account
+ * Core mode: Update accounts table
+ * CMS mode: Requires Platform API
+ */
+export async function update(id: string, data: Partial<TAccount>) {
+  try {
+    await updateAccount(id, data);
+  } catch (error) {
+    console.error("Failed to update account:", error);
+    throw error;
+  }
 }

@@ -57,6 +57,27 @@
       "when": 1768291219963,
       "tag": "0007_curved_plazm",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773126306443,
+      "tag": "0008_loose_grim_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773154853097,
+      "tag": "0009_melted_baron_strucker",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773300682110,
+      "tag": "0010_certain_pepper_potts",
+      "breakpoints": true
     }
   ]
 }

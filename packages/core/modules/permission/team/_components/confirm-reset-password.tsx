@@ -14,7 +14,7 @@ import { Copy } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { Member } from "../_server/team.service";
+import type { Member } from "../types";
 import { MemberUser } from "./member-list";
 
 type Props = {
@@ -73,7 +73,7 @@ export const ConfirmResetPassword = ({
               <DialogTitle>{t("confirm.title")}</DialogTitle>
               <DialogDescription style={{ whiteSpace: "pre-line" }}>
                 {t("confirm.description", {
-                  userName: member.user?.name || member.email.split("@")[0],
+                  userName: member.account?.name || member.account?.email?.split("@")[0] || "Unknown",
                 })}
               </DialogDescription>
             </DialogHeader>
@@ -98,7 +98,7 @@ export const ConfirmResetPassword = ({
             <div className="space-y-4">
               <MemberUser
                 member={member}
-                isYou={member.user?.id === sessionUserId}
+                isYou={member.accountId === sessionUserId}
               />
               <div className="text-sm">{t("result.content")}</div>
               <div className="rounded-md border bg-muted px-4 py-3 text-xl font-medium select-all text-center relative">

@@ -1,6 +1,6 @@
 "use client";
 
-import type { TUser } from "@heiso/core/lib/db/schema";
+import type { TAccount } from "@heiso/core/lib/db/schema";
 import { useSession } from "next-auth/react";
 import { createContext, useContext, useEffect, useState } from "react";
 
@@ -15,12 +15,12 @@ interface Membership {
 }
 
 interface AccountContextType {
-  account: Partial<TUser> | null;
+  account: Partial<TAccount> | null;
   isDeveloper: boolean;
   membership: Membership[] | null;
   isLoading: boolean;
   error: Error | null;
-  updateAccount: (account: Partial<TUser>) => void;
+  updateAccount: (account: Partial<TAccount>) => void;
 }
 
 const AccountContext = createContext<AccountContextType>({
@@ -34,7 +34,7 @@ const AccountContext = createContext<AccountContextType>({
 
 export function AccountProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
-  const [account, setAccount] = useState<Partial<TUser> | null>(null);
+  const [account, setAccount] = useState<Partial<TAccount> | null>(null);
   const [isDeveloper, setIsDeveloper] = useState<boolean>(false);
   const [membership, setMembership] = useState<Membership[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,7 +82,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     fetchAccount();
   }, [session?.user?.id, session?.user?.email]);
 
-  const updateAccount = (updatedAccount: Partial<TUser>) => {
+  const updateAccount = (updatedAccount: Partial<TAccount>) => {
     setAccount(updatedAccount);
   };
 

@@ -60,7 +60,7 @@ const fuzzyFilter: FilterFn<Developer> = (row, _columnId, filterValue) => {
   const searchValue = filterValue.toLowerCase();
   const user = row.original.user;
 
-  return (
+  return !!(
     user.name?.toLowerCase().includes(searchValue) ||
     user.email?.toLowerCase().includes(searchValue)
   );
@@ -106,7 +106,7 @@ export function DeveloperList({ data }: { data: Developer[] }) {
                   className="text-xs text-destructive"
                   onClick={() => {
                     startRemoveTransition(async () => {
-                      await removeDeveloper({ id: row.original.userId });
+                      await removeDeveloper({ id: row.original.accountId });
                     });
                   }}
                 >
@@ -270,7 +270,7 @@ export const DeveloperUser = ({
 }) => {
   const t = useTranslations("devCenter.developers");
   const { user } = developer;
-  const userName = user.name || user.email.split("@")[0];
+  const userName = user.name || user.email?.split("@")[0] || "Unknown";
 
   return (
     <div className="flex items-center gap-3 min-h-[35px]">

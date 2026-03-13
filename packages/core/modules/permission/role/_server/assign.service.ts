@@ -24,7 +24,7 @@ async function assignMenus({
       );
     }
   });
-  revalidatePath("/dashboard/role", "page");
+  revalidatePath("/account/role", "page");
 }
 
 async function assignPermissions({
@@ -46,7 +46,7 @@ async function assignPermissions({
       );
     }
   });
-  revalidatePath("/dashboard/role", "page");
+  revalidatePath("/account/role", "page");
 }
 
 export { assignMenus, assignPermissions };

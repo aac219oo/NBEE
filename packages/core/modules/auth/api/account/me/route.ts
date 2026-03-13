@@ -27,8 +27,8 @@ export async function GET() {
         developer: { userId },
         membership: {
           id: 'admin',
-          isOwner: true,
-          role: {
+          role: 'owner',
+          customRole: {
             id: 'admin',
             name: 'Admin',
             fullAccess: true,

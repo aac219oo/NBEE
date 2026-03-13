@@ -123,14 +123,13 @@ export function CreateApiKeyDialog({
             key: result.apiKey.key,
             apiKey: {
               id: result.apiKey.id,
-              userId: result.apiKey.userId,
+              accountId: result.apiKey.accountId,
               name: result.apiKey.name,
               rateLimit: result.apiKey.rateLimit,
               expiresAt: result.apiKey.expiresAt,
               createdAt: result.apiKey.createdAt,
               updatedAt: result.apiKey.updatedAt,
               lastUsedAt: result.apiKey.lastUsedAt,
-              tenantId: result.apiKey.tenantId,
             },
           });
           toast.success(t("create_success"));

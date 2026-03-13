@@ -1,6 +1,8 @@
 import { getInviteToken } from "@heiso/core/modules/auth/join/_server/member.service";
 import type { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token") || "";

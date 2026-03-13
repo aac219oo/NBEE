@@ -2,50 +2,52 @@
 
 import type { Locale } from "@heiso/core/i18n/config";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import { generalSettings } from "@heiso/core/lib/db/schema";
+import { settings } from "@heiso/core/lib/db/schema";
 import type { Settings } from "@heiso/core/types/system";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
 
-// 讀取 general_settings（系統級設定）
+// 讀取 settings（系統級設定，group='general'）
 async function getGeneralSettings(): Promise<Settings> {
   const db = await getDynamicDb();
-  const settings = await db.query.generalSettings.findMany({
+  const result = await db.query.settings.findMany({
     columns: { name: true, value: true },
-    where: (fields, { isNull }) => isNull(fields.deletedAt),
+    where: (fields, { and, eq, isNull }) =>
+      and(eq(fields.group, "general"), isNull(fields.deletedAt)),
   });
-  const result: Record<string, unknown> = {};
-  for (const { name, value } of settings) {
-    result[name] = value;
+
+  const settingsMap: Record<string, unknown> = {};
+  for (const { name, value } of result) {
+    settingsMap[name] = value;
   }
-  return result;
+  return settingsMap;
 }
 
-// 寫入 general_settings（以 name 為 key upsert）
+// 寫入 settings（以 name 為 key upsert）
 async function saveGeneralSetting(data: Settings) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-
-  if (!tenantId) {
-    throw new Error("Tenant ID is required for saving general settings");
-  }
 
   // Check for domain update
   const basicSettings = (data as any)?.basic;
   if (basicSettings?.domain !== undefined) {
     try {
-      const { getTenantAdapter } = await import("@heiso/core/lib/adapters");
-      const tenantAdapter = getTenantAdapter();
-      if (tenantAdapter) {
-        await tenantAdapter.updateTenant(tenantId, {
-          customDomain: basicSettings.domain || null,
-        });
-      } else {
-        console.warn("[saveGeneralSetting] TenantAdapter not registered, skipping remote update");
+      // 取得目前 tenant 的 tenantId (從 settings 中)
+      const tenantIdSetting = await db.query.settings.findFirst({
+        where: (fields, { eq }) => eq(fields.name, "tenantId"),
+      });
+      const tenantId = tenantIdSetting?.value as string | undefined;
+
+      if (tenantId) {
+        const { getTenantAdapter } = await import("@heiso/core/lib/adapters");
+        const tenantAdapter = getTenantAdapter();
+        if (tenantAdapter) {
+          await tenantAdapter.updateTenant(tenantId, {
+            customDomain: basicSettings.domain || null,
+          });
+        } else {
+          console.warn("[saveGeneralSetting] TenantAdapter not registered, skipping remote update");
+        }
       }
     } catch (error) {
       console.error("Failed to update tenant custom domain", error);
-      // We might want to throw here to prevent saving local settings if remote fails
-      // Or just log it. For now, let's throw to notify user via UI error if possible.
       throw new Error("Failed to update custom domain");
     }
   }
@@ -56,16 +58,17 @@ async function saveGeneralSetting(data: Settings) {
     await Promise.all(
       entries.map(async ([key, value]) => {
         await tx
-          .insert(generalSettings)
+          .insert(settings)
           .values({
-            tenantId,
             name: key,
             value,
+            group: "general",
           })
           .onConflictDoUpdate({
-            target: [generalSettings.tenantId, generalSettings.name],
+            target: settings.name,
             set: {
               value,
+              updatedAt: new Date(),
             },
           });
       }),
@@ -73,26 +76,22 @@ async function saveGeneralSetting(data: Settings) {
   });
 }
 
-// 快捷：更新系統預設語言到 general_settings
+// 快捷：更新系統預設語言到 settings
 async function saveDefaultLanguage(locale: Locale) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-
-  if (!tenantId) {
-    throw new Error("Tenant ID is required for saving default language");
-  }
 
   await db
-    .insert(generalSettings)
+    .insert(settings)
     .values({
-      tenantId,
       name: "language",
       value: { default: locale },
+      group: "general",
     })
     .onConflictDoUpdate({
-      target: [generalSettings.tenantId, generalSettings.name],
+      target: settings.name,
       set: {
         value: { default: locale },
+        updatedAt: new Date(),
       },
     });
 }

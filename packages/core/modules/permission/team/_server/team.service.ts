@@ -2,174 +2,286 @@
 
 import { settings } from "@heiso/core/config/settings";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import type { TMember, TRole, TUser } from "@heiso/core/lib/db/schema";
-import { members, roles } from "@heiso/core/lib/db/schema";
-import { users } from "@heiso/core/lib/db/schema/auth/user";
+import { members, foreignAccounts, accounts } from "@heiso/core/lib/db/schema";
 import { sendApprovedEmail, sendInviteUserEmail } from "@heiso/core/lib/email";
-import { hashPassword } from "@heiso/core/lib/hash";
 import { generateInviteToken } from "@heiso/core/lib/id-generator";
 import { auth } from "@heiso/core/modules/auth/auth.config";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { eq, inArray, and, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { MemberStatus, type Member } from "../types";
 
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
+const isCoreMode = () => process.env.APP_MODE === "core";
 
-export type Member = TMember & {
-  user: TUser | null;
-  role: TRole | null;
-};
+/**
+ * 取得團隊所有成員
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 members 表 + FDW foreignAccounts
+ */
 async function getTeamMembers(): Promise<Member[]> {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
 
-  const members = await db.query.members.findMany({
-    with: {
-      user: true,
-      role: true,
-    },
-    where: (t, { isNull, and, eq }) => {
-      const filters = [isNull(t.deletedAt)];
-      if (tenantId) filters.push(eq(t.tenantId, tenantId));
-      return and(...filters);
-    },
-    orderBy: (t, { asc }) => [asc(t.createdAt)],
-  });
-  return members;
+  if (isCoreMode()) {
+    // Core 模式：直接從 accounts 表取得
+    const accountList = await db.query.accounts.findMany({
+      with: {
+        customRole: true,
+      },
+      where: (t, { isNull }) => isNull(t.deletedAt),
+      orderBy: (t, { asc }) => [asc(t.createdAt)],
+    });
+
+    // 轉換為 Member 格式
+    return accountList.map(account => ({
+      id: account.id,
+      accountId: account.id,
+      roleId: account.roleId,
+      role: account.role as any,
+      status: account.status as any,
+      inviteToken: account.inviteToken,
+      inviteExpiredAt: account.inviteExpiredAt,
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+      deletedAt: account.deletedAt,
+      account: {
+        id: account.id,
+        email: account.email,
+        name: account.name,
+        avatar: account.avatar,
+        active: account.active,
+        lastLoginAt: account.lastLoginAt,
+      } as any,
+      // @ts-ignore - customRole 與 role 名稱衝突
+      role: account.customRole ?? null,
+    })) as Member[];
+  } else {
+    // APPS 模式：使用 members 表 + FDW
+    const memberList = await db.query.members.findMany({
+      with: {
+        role: true,
+      },
+      where: (t, { isNull }) => isNull(t.deletedAt),
+      orderBy: (t, { asc }) => [asc(t.createdAt)],
+    });
+
+    // 批次取得帳號資訊 (透過 FDW)
+    const accountIds = memberList.map(m => m.accountId).filter((id): id is string => id !== null);
+    const accountsData = accountIds.length > 0
+      ? await db
+        .select()
+        .from(foreignAccounts)
+        .where(
+          // @ts-ignore - drizzle inArray type issue
+          accountIds.length === 1
+            ? eq(foreignAccounts.id, accountIds[0])
+            : inArray(foreignAccounts.id, accountIds)
+        )
+      : [];
+
+    const accountMap = new Map(accountsData.map(a => [a.id, a]));
+
+    return memberList.map(member => ({
+      ...member,
+      account: member.accountId ? accountMap.get(member.accountId) ?? null : null,
+      role: member.role ?? null,
+    }));
+  }
 }
 
+/**
+ * 邀請新成員
+ * Core 模式：直接在 accounts 表建立帳號
+ * APPS 模式：透過 Hive 服務查找或建立帳號，再建立 members 記錄
+ */
 async function invite({
   email,
-  role,
   name,
+  roleId,
+  accountId: providedAccountId,
 }: {
-  email: string;
-  role?: string;
+  email?: string;
   name?: string;
+  roleId?: string | null;
+  accountId?: string;
 }) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
+  const inviteToken = generateInviteToken();
+  const inviteExpiredAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
 
-  // 檢查是否已存在相同 email 的成員
-  const existingMember = await db
-    .select()
-    .from(members)
-    .where(and(eq(members.email, email), eq(members.tenantId, tenantId)))
-    .limit(1);
+  if (isCoreMode()) {
+    // Core 模式：直接在 accounts 表建立或更新
+    if (!email) throw new Error("EMAIL_REQUIRED");
 
-  if (existingMember.length > 0) {
-    throw new Error("EMAIL_REPEAT");
-  }
-
-  // 若提供 name，先建立或更新 user 資料
-  let boundUserId: string | undefined;
-  if (name?.trim()) {
-    const existingUser = await db.query.users.findFirst({
+    // 檢查是否已存在此 email 的帳號
+    const existingAccount = await db.query.accounts.findFirst({
       where: (t, { eq }) => eq(t.email, email),
     });
 
-    if (existingUser) {
-      // 輸入使用者名稱（不影響密碼與登入狀態）
-      await db
-        .update(users)
-        .set({ name, updatedAt: new Date() })
-        .where(eq(users.id, existingUser.id));
-      boundUserId = existingUser.id;
-    } else {
-      // 建立使用者占位密碼，避免與註冊流程衝突
-      const placeholder = await hashPassword(generateInviteToken());
-      const [created] = await db
-        .insert(users)
-        .values({
-          email,
-          name,
-          password: placeholder,
-          active: false,
-          mustChangePassword: true,
-          updatedAt: new Date(),
-        })
-        .returning();
-      boundUserId = created?.id;
+    if (existingAccount) {
+      if (existingAccount.deletedAt) {
+        // 如果曾被刪除，則恢復
+        await db
+          .update(accounts)
+          .set({
+            status: MemberStatus.Invited,
+            roleId: roleId ?? null,
+            inviteToken,
+            inviteExpiredAt,
+            deletedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(accounts.id, existingAccount.id));
+      } else if (existingAccount.status === MemberStatus.Suspended) {
+        // 如果曾被停用，則恢復為邀請狀態
+        await db
+          .update(accounts)
+          .set({
+            status: MemberStatus.Invited,
+            roleId: roleId ?? null,
+            inviteToken,
+            inviteExpiredAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(accounts.id, existingAccount.id));
+      } else {
+        throw new Error("MEMBER_EXISTS");
+      }
+
+      await sendInvite({ email, inviteToken, isOwner: false });
+      revalidatePath("/account/team", "page");
+      return existingAccount;
     }
-  }
 
-  const inviteToken = generateInviteToken();
-  const inviteTokenExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
+    // 建立新帳號
+    const { hashPassword } = await import("@heiso/core/lib/hash");
+    const { generateId } = await import("@heiso/core/lib/id-generator");
+    const randomPassword = await hashPassword(generateId(undefined, 32));
 
-  const inviteId = await db
-    .insert(members)
-    .values({
-      roleId: role !== "owner" ? role : null,
-      isOwner: role === "owner",
-      email,
-      userId: boundUserId ?? undefined,
-      inviteToken,
-      tokenExpiredAt: inviteTokenExpiresAt,
-      tenantId,
-    })
-    .returning();
+    const [created] = await db
+      .insert(accounts)
+      .values({
+        email,
+        name: name ?? email.split("@")[0],
+        password: randomPassword,
+        role: "member",
+        roleId: roleId ?? null,
+        status: MemberStatus.Invited,
+        inviteToken,
+        inviteExpiredAt,
+        active: false,
+      })
+      .returning();
 
-  if (inviteId) {
-    const _result = await sendInvite({
-      email,
-      inviteToken,
-      isOwner: role === "owner",
+    await sendInvite({ email, inviteToken, isOwner: false });
+    revalidatePath("/account/team", "page");
+    return created;
+  } else {
+    // APPS 模式：透過 Hive 服務
+    let accountId = providedAccountId;
+    if (!accountId) {
+      if (!email) throw new Error("EMAIL_OR_ACCOUNT_ID_REQUIRED");
+      const { getHiveService } = await import("@heiso/hive");
+      const { getAccountWithCreate } = await getHiveService();
+      accountId = await getAccountWithCreate({ email, name });
+    }
+
+    // 檢查是否已存在此帳號的成員
+    const existingMember = await db.query.members.findFirst({
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.accountId, accountId as string), isNull(t.deletedAt)),
     });
 
-    revalidatePath("/dashboard/permission/team", "page");
-  }
+    if (existingMember) {
+      if (existingMember.status === MemberStatus.Suspended) {
+        // 如果曾被停用，則恢復為邀請狀態
+        await db
+          .update(members)
+          .set({
+            status: MemberStatus.Invited,
+            roleId,
+            inviteToken,
+            inviteExpiredAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(members.id, existingMember.id));
+        revalidatePath("/account/team", "page");
+        return;
+      }
+      throw new Error("MEMBER_EXISTS");
+    }
 
-  return inviteId;
+    const [created] = await db
+      .insert(members)
+      .values({
+        accountId: accountId as string,
+        roleId: roleId ?? null,
+        role: 'member',
+        status: MemberStatus.Invited,
+        inviteToken,
+        inviteExpiredAt,
+      })
+      .returning();
+
+    if (created && email) {
+      await sendInvite({ email, inviteToken, isOwner: false });
+      revalidatePath("/account/team", "page");
+    }
+
+    return created;
+  }
 }
 
+/**
+ * 更新成員資料
+ * Core 模式：更新 accounts 表
+ * APPS 模式：更新 members 表
+ */
 async function updateMember({
   id,
   data,
 }: {
   id: string;
   data: {
-    isOwner?: boolean;
+    role?: 'owner' | 'admin' | 'member';
     roleId?: string | null;
-    status?: string;
+    status?: 'invited' | 'active' | 'inactive' | 'suspended';
   };
 }) {
   const db = await getDynamicDb();
-  // Prepare member updates, including deletedAt based on status
-  const isJoined = data.status === "joined";
 
-  const tenantId = await getTenantId();
-  // Note: For updates, rely on ID but filtering by tenantId is safer
-  const filters = [eq(members.id, id)];
-  if (tenantId) filters.push(eq(members.tenantId, tenantId));
+  if (isCoreMode()) {
+    // Core 模式：更新 accounts 表
+    const accountUpdates: Partial<typeof accounts.$inferInsert> = {
+      ...data,
+      updatedAt: new Date(),
+    };
 
-  const memberUpdates: Partial<typeof members.$inferInsert> = {
-    ...data,
-    updatedAt: new Date(),
-  };
+    const result = await db
+      .update(accounts)
+      .set(accountUpdates)
+      .where(eq(accounts.id, id));
 
-  const member = await db
-    .update(members)
-    .set(memberUpdates)
-    .where(and(...filters));
+    revalidatePath("/account/team", "page");
+    return result;
+  } else {
+    // APPS 模式：更新 members 表
+    const memberUpdates: Partial<typeof members.$inferInsert> = {
+      ...data,
+      updatedAt: new Date(),
+    };
 
-  // user table，除了 joined，其他狀態都皆不可登入
-  const [current] = await db
-    .select()
-    .from(members)
-    .where(and(...filters))
-    .limit(1);
-  const userId = current?.userId;
-  if (userId) {
-    await db
-      .update(users)
-      .set({ active: isJoined })
-      .where(eq(users.id, userId));
+    const result = await db
+      .update(members)
+      .set(memberUpdates)
+      .where(eq(members.id, id));
+
+    revalidatePath("/account/team", "page");
+    return result;
   }
-
-  revalidatePath("/dashboard/permission/team", "page");
-  return member;
 }
 
+/**
+ * 發送邀請 email
+ */
 async function sendInvite({
   email,
   inviteToken,
@@ -189,6 +301,9 @@ async function sendInvite({
   return result;
 }
 
+/**
+ * 發送核准通知 email
+ */
 async function sendApproved({ email }: { email: string }) {
   const { NOTIFY_EMAIL } = await settings();
   const result = await sendApprovedEmail({
@@ -198,75 +313,134 @@ async function sendApproved({ email }: { email: string }) {
   return result;
 }
 
+/**
+ * 重寄邀請
+ * Core 模式：更新 accounts 表
+ * APPS 模式：更新 members 表
+ */
 async function resendInvite(id: string) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-
-  const member = await db.query.members.findFirst({
-    where: (t, { eq, and }) => {
-      const filters = [eq(t.id, id), isNull(t.deletedAt)];
-      if (tenantId) filters.push(eq(t.tenantId, tenantId));
-      return and(...filters);
-    },
-  });
-
-  if (!member) {
-    throw new Error("Member not found");
-  }
-
   const inviteToken = generateInviteToken();
-  const inviteTokenExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
+  const inviteExpiredAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7 days
 
-  await db
-    .update(members)
-    .set({
+  if (isCoreMode()) {
+    // Core 模式：直接從 accounts 表取得
+    const account = await db.query.accounts.findFirst({
+      where: (t, { eq, isNull }) => and(eq(t.id, id), isNull(t.deletedAt)),
+    });
+
+    if (!account?.email) {
+      throw new Error("Account not found");
+    }
+
+    await db
+      .update(accounts)
+      .set({
+        inviteToken,
+        inviteExpiredAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(accounts.id, id));
+
+    const result = await sendInvite({
+      email: account.email,
       inviteToken,
-      tokenExpiredAt: inviteTokenExpiresAt,
-    })
-    .where(eq(members.id, id)) // Should filter by tenantId too but id is unique UUID
-    .returning();
+      isOwner: account.role === 'owner',
+    });
 
-  const { email } = member;
-  const result = await sendInvite({
-    email,
-    inviteToken,
-    isOwner: member.isOwner,
-  });
+    revalidatePath("/account/team", "page");
+    return result;
+  } else {
+    // APPS 模式：使用 members 表 + FDW
+    const member = await db.query.members.findFirst({
+      where: (t, { eq, and, isNull }) =>
+        and(eq(t.id, id), isNull(t.deletedAt)),
+    });
 
-  revalidatePath("/dashboard/permission/team", "page");
-  return result;
+    if (!member || !member.accountId) {
+      throw new Error("Member not found");
+    }
+
+    // 取得帳號 email (透過 FDW)
+    const [account] = await db
+      .select()
+      .from(foreignAccounts)
+      .where(eq(foreignAccounts.id, member.accountId))
+      .limit(1);
+
+    if (!account?.email) {
+      throw new Error("Account not found");
+    }
+
+    await db
+      .update(members)
+      .set({
+        inviteToken,
+        inviteExpiredAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(members.id, id));
+
+    const result = await sendInvite({
+      email: account.email,
+      inviteToken,
+      isOwner: member.role === 'owner',
+    });
+
+    revalidatePath("/account/team", "page");
+    return result;
+  }
 }
 
+/**
+ * 撤銷邀請
+ * Core 模式：軟刪除 accounts 記錄
+ * APPS 模式：刪除 members 記錄
+ */
 async function revokeInvite(id: string) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-  const filters = [eq(members.id, id)];
-  if (tenantId) filters.push(eq(members.tenantId, tenantId));
 
-  await db.delete(members).where(and(...filters));
-}
-
-async function leaveTeam(id: string) {
-  const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-  const filters = [eq(members.id, id)];
-  if (tenantId) filters.push(eq(members.tenantId, tenantId));
-
-  // 刪除成員並取得其 userId
-  const [deletedMember] = await db
-    .delete(members)
-    .where(and(...filters))
-    .returning({ userId: members.userId });
-
-  // 若有綁定使用者，連同 users 一併刪除
-  const userId = deletedMember?.userId;
-  if (userId) {
-    await db.delete(users).where(eq(users.id, userId));
+  if (isCoreMode()) {
+    // Core 模式：軟刪除 accounts
+    await db
+      .update(accounts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(accounts.id, id));
+  } else {
+    // APPS 模式：刪除 members
+    await db.delete(members).where(eq(members.id, id));
   }
 
-  revalidatePath("/dashboard/permission/team", "page");
+  revalidatePath("/account/team", "page");
 }
 
+/**
+ * 離開團隊
+ * Core 模式：軟刪除 accounts 記錄
+ * APPS 模式：刪除 members 記錄
+ */
+async function leaveTeam(id: string) {
+  const db = await getDynamicDb();
+
+  if (isCoreMode()) {
+    // Core 模式：軟刪除 accounts
+    await db
+      .update(accounts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(accounts.id, id));
+  } else {
+    // APPS 模式：刪除 members
+    await db.delete(members).where(eq(members.id, id));
+  }
+
+  revalidatePath("/account/team", "page");
+}
+
+/**
+ * 新增成員（直接啟用，不需要邀請流程）
+ * Core 模式：直接在 accounts 表建立帳號
+ * APPS 模式：透過 Hive 服務建立帳號，再建立 members 記錄
+ */
 async function addMember({
   email,
   roleId,
@@ -274,62 +448,110 @@ async function addMember({
 }: {
   email: string;
   roleId: string;
-  initialPassword: string;
+  initialPassword?: string;
 }) {
   const db = await getDynamicDb();
-  const tenantId = await getTenantId();
-  if (!tenantId) throw new Error("Tenant context missing");
+  const { hashPassword } = await import("@heiso/core/lib/hash");
 
-  // Check if email already exists in users
-  const existingUser = await db.query.users.findFirst({
-    where: (t, { eq }) => eq(t.email, email),
-  });
+  if (isCoreMode()) {
+    // Core 模式：直接在 accounts 表建立
+    const existingAccount = await db.query.accounts.findFirst({
+      where: (t, { eq }) => eq(t.email, email),
+    });
 
-  // Check if member already exists in THIS tenant
-  const existingMember = await db.query.members.findFirst({
-    where: (t, { eq, isNull, and }) => and(eq(t.email, email), isNull(t.deletedAt), eq(t.tenantId, tenantId)),
-  });
+    if (existingAccount && !existingAccount.deletedAt) {
+      throw new Error("Member already exists");
+    }
 
-  if (existingMember) {
-    throw new Error("Email already exists in team");
-  }
+    if (!initialPassword) {
+      throw new Error("Initial password is required");
+    }
 
-  let userId = existingUser?.id;
-  let user = existingUser;
-
-  // If user does not exist, create it
-  if (!existingUser) {
     const hashedPassword = await hashPassword(initialPassword);
-    const [newUser] = await db
-      .insert(users)
+    const displayName = email.split("@")[0];
+
+    if (existingAccount) {
+      // 恢復已刪除的帳號
+      const [updated] = await db
+        .update(accounts)
+        .set({
+          password: hashedPassword,
+          roleId,
+          role: "member",
+          status: "active",
+          active: true,
+          deletedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(accounts.id, existingAccount.id))
+        .returning();
+
+      revalidatePath("/account/team", "page");
+      return { member: updated };
+    }
+
+    const [account] = await db
+      .insert(accounts)
       .values({
         email,
+        name: displayName,
         password: hashedPassword,
-        name: email.split("@")[0], // Use email prefix as default name
-        mustChangePassword: true, // Force password change on first login
+        roleId,
+        role: "member",
+        status: "active",
+        active: true,
       })
       .returning();
-    userId = newUser.id;
-    user = newUser;
+
+    revalidatePath("/account/team", "page");
+    return { member: account };
+  } else {
+    // APPS 模式：透過 Hive 服務
+    const { getAccountWithPassword, createDevAccount } = await import("@heiso/hive/services/account");
+
+    let account = await getAccountWithPassword(email);
+
+    if (!account && initialPassword) {
+      const hashedPassword = await hashPassword(initialPassword);
+      const displayName = email.split("@")[0];
+      account = await createDevAccount(email, hashedPassword, displayName);
+    }
+
+    if (!account) {
+      throw new Error("Account not found and cannot be created without initial password");
+    }
+
+    // 檢查成員是否已存在
+    const existingMember = await db.query.members.findFirst({
+      where: (t, { eq, isNull, and }) =>
+        and(eq(t.accountId, account.id), isNull(t.deletedAt)),
+    });
+
+    if (existingMember) {
+      throw new Error("Member already exists");
+    }
+
+    // 建立成員記錄
+    const [member] = await db
+      .insert(members)
+      .values({
+        accountId: account.id,
+        roleId,
+        role: 'member',
+        status: "active",
+      })
+      .returning();
+
+    revalidatePath("/account/team", "page");
+    return { member };
   }
-
-  // Create member record (linking to userId)
-  const [member] = await db
-    .insert(members)
-    .values({
-      userId: userId!,
-      roleId,
-      isOwner: false,
-      status: "joined",
-      email,
-      tenantId,
-    })
-    .returning();
-
-  revalidatePath("/dashboard/permission/team", "page");
-  return { user, member };
 }
 
+/**
+ * 轉移擁有權
+ * Core 模式：更新 accounts 表
+ * APPS 模式：更新 members 表
+ */
 async function transferOwnership({
   newOwnerId,
   currentOwnerId,
@@ -342,77 +564,113 @@ async function transferOwnership({
   if (!session?.user?.id) {
     throw new Error("Unauthorized");
   }
-  const tenantId = await getTenantId();
 
-  // 查找當前擁有者
-  const currentOwnerMember = await db.query.members.findFirst({
-    where: (t, { eq, and }) => {
-      const filters = [
-        eq(t.id, currentOwnerId),
-        eq(t.userId, session.user.id!),
-        eq(t.isOwner, true),
-      ];
-      if (tenantId) filters.push(eq(t.tenantId, tenantId));
-      return and(...filters);
-    },
-  });
+  if (isCoreMode()) {
+    // Core 模式：直接更新 accounts 表
+    // 查找當前擁有者
+    const currentOwnerAccount = await db.query.accounts.findFirst({
+      where: (t, { eq, and }) =>
+        and(
+          eq(t.id, currentOwnerId),
+          eq(t.id, session.user.id!),
+          eq(t.role, 'owner'),
+        ),
+    });
 
-  if (!currentOwnerMember) {
-    throw new Error("Only current owner can transfer ownership");
+    if (!currentOwnerAccount) {
+      throw new Error("Only current owner can transfer ownership");
+    }
+
+    // 查找新擁有者
+    const newOwnerAccount = await db.query.accounts.findFirst({
+      where: (t, { eq, and }) =>
+        and(eq(t.id, newOwnerId), eq(t.status, "active")),
+    });
+
+    if (!newOwnerAccount) {
+      throw new Error("Target account must be active");
+    }
+
+    await db.transaction(async (tx) => {
+      // 設定新擁有者
+      await tx
+        .update(accounts)
+        .set({
+          role: 'owner',
+          roleId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(accounts.id, newOwnerId));
+
+      // 移除前擁有者權限（降為 admin）
+      await tx
+        .update(accounts)
+        .set({
+          role: 'admin',
+          roleId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(accounts.id, currentOwnerId));
+    });
+  } else {
+    // APPS 模式：更新 members 表
+    // 查找當前擁有者（透過 session 的 accountId 驗證）
+    const currentOwnerMember = await db.query.members.findFirst({
+      where: (t, { eq, and }) =>
+        and(
+          eq(t.id, currentOwnerId),
+          eq(t.accountId, session.user.id!),
+          eq(t.role, 'owner'),
+        ),
+    });
+
+    if (!currentOwnerMember) {
+      throw new Error("Only current owner can transfer ownership");
+    }
+
+    // 查找新擁有者
+    const newOwnerMember = await db.query.members.findFirst({
+      where: (t, { eq, and }) =>
+        and(eq(t.id, newOwnerId), eq(t.status, "active")),
+    });
+
+    if (!newOwnerMember) {
+      throw new Error("Target member must be joined and active");
+    }
+
+    await db.transaction(async (tx) => {
+      // 設定新擁有者
+      await tx
+        .update(members)
+        .set({
+          role: 'owner',
+          roleId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(members.id, newOwnerId));
+
+      // 移除前擁有者權限（降為 admin）
+      await tx
+        .update(members)
+        .set({
+          role: 'admin',
+          roleId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(members.id, currentOwnerId));
+    });
   }
 
-  // 查找新擁有者
-  const newOwnerMember = await db.query.members.findFirst({
-    where: (t, { eq, and }) => {
-      const filters = [eq(t.id, newOwnerId), eq(t.status, "joined")];
-      if (tenantId) filters.push(eq(t.tenantId, tenantId));
-      return and(...filters);
-    },
-  });
-
-  if (!newOwnerMember) {
-    throw new Error("Target member must be joined and active");
-  }
-
-  // 查找預設角色
-  const defaultRole = await db.query.roles.findFirst({
-    where: (t, { isNull, and, eq }) => {
-      const filters = [isNull(t.deletedAt)];
-      if (tenantId) filters.push(eq(t.tenantId, tenantId));
-      return and(...filters);
-    },
-    orderBy: [asc(roles.createdAt)],
-  });
-
-  if (!defaultRole) {
-    throw new Error("No available role found for former owner");
-  }
-
-  await db.transaction(async (tx) => {
-    // 設定新擁有者
-    await tx
-      .update(members)
-      .set({
-        isOwner: true,
-        roleId: null,
-      })
-      .where(eq(members.id, newOwnerId));
-
-    // 設定前擁有者角色
-    await tx
-      .update(members)
-      .set({
-        isOwner: false,
-        roleId: null, //移除權限
-      })
-      .where(eq(members.id, currentOwnerId));
-  });
-
-  revalidatePath("/dashboard/team");
+  revalidatePath("/account/team");
 
   return { success: true };
 }
 
+/**
+ * 重設成員密碼
+ * Core 模式：直接更新 accounts 表
+ * APPS 模式：需要 Platform API 支援
+ */
 async function resetMemberPassword({
   actorMemberId,
   targetMemberId,
@@ -427,52 +685,80 @@ async function resetMemberPassword({
   if (!session?.user?.id) {
     throw new Error("UNAUTHORIZED");
   }
-  const tenantId = await getTenantId();
 
-  const actorFilters = [eq(members.id, actorMemberId)];
-  if (tenantId) actorFilters.push(eq(members.tenantId, tenantId));
+  const { hashPassword } = await import("@heiso/core/lib/hash");
 
-  // 以成員ID驗證操作者身份與權限
-  const actor = await db
-    .select()
-    .from(members)
-    .where(and(...actorFilters))
-    .limit(1);
+  if (isCoreMode()) {
+    // Core 模式：直接驗證並更新 accounts 表
+    // 驗證操作者身份
+    const actor = await db.query.accounts.findFirst({
+      where: (t, { eq }) => eq(t.id, actorMemberId),
+    });
 
-  if (!actor[0]) {
-    return { success: false, error: "ACTOR_MEMBER_NOT_FOUND" };
+    if (!actor) {
+      return { success: false, error: "ACTOR_NOT_FOUND" };
+    }
+    if (actor.id !== session.user.id) {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+    if (actor.role !== 'owner') {
+      return { success: false, error: "PERMISSION_DENIED" };
+    }
+
+    // 取得目標帳號
+    const target = await db.query.accounts.findFirst({
+      where: (t, { eq }) => eq(t.id, targetMemberId),
+    });
+
+    if (!target) {
+      return { success: false, error: "TARGET_NOT_FOUND" };
+    }
+
+    // 更新密碼
+    const hashedPassword = await hashPassword(newPassword);
+    await db
+      .update(accounts)
+      .set({
+        password: hashedPassword,
+        mustChangePassword: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(accounts.id, targetMemberId));
+
+    return { success: true };
+  } else {
+    // APPS 模式：驗證並呼叫 Hive 服務
+    // 驗證操作者身份
+    const actor = await db.query.members.findFirst({
+      where: (t, { eq }) => eq(t.id, actorMemberId),
+    });
+
+    if (!actor) {
+      return { success: false, error: "ACTOR_MEMBER_NOT_FOUND" };
+    }
+    if (actor.accountId !== session.user.id) {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+    if (actor.role !== 'owner') {
+      return { success: false, error: "PERMISSION_DENIED" };
+    }
+
+    // 取得目標成員
+    const target = await db.query.members.findFirst({
+      where: (t, { eq }) => eq(t.id, targetMemberId),
+    });
+
+    if (!target || !target.accountId) {
+      return { success: false, error: "MEMBER_NOT_FOUND" };
+    }
+
+    // 透過 Hive 服務更新密碼
+    const { updateAccountPassword } = await import("@heiso/hive/services/account");
+    const hashedPassword = await hashPassword(newPassword);
+    await updateAccountPassword(target.accountId, hashedPassword, true);
+
+    return { success: true };
   }
-  if (actor[0].userId !== session.user.id) {
-    return { success: false, error: "UNAUTHORIZED" };
-  }
-  if (!actor[0].isOwner) {
-    return { success: false, error: "PERMISSION_DENIED" };
-  }
-
-  const targetFilters = [eq(members.id, targetMemberId)];
-  if (tenantId) targetFilters.push(eq(members.tenantId, tenantId));
-
-  // 重設密碼的成員
-  const target = await db
-    .select()
-    .from(members)
-    .where(and(...targetFilters))
-    .limit(1);
-
-  if (!target[0]) {
-    return { success: false, error: "MEMBER_NOT_FOUND" };
-  }
-  if (!target[0].userId) {
-    return { success: false, error: "USER_NOT_ACTIVATED" };
-  }
-
-  const hashedPassword = await hashPassword(newPassword);
-
-  await db
-    .update(users)
-    .set({ password: hashedPassword, mustChangePassword: true })
-    .where(eq(users.id, target[0].userId));
-  return { success: true };
 }
 
 export {

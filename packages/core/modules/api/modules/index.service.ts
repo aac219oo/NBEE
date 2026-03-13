@@ -25,7 +25,7 @@ export async function verifyApiKey(key: string): Promise<{
     const apiKey = await db.query.apiKeys.findFirst({
       columns: {
         id: true,
-        userId: true,
+        accountId: true,
         rateLimit: true,
         expiresAt: true,
       },
@@ -58,7 +58,7 @@ export async function verifyApiKey(key: string): Promise<{
 
     return {
       valid: true,
-      userId: apiKey.userId,
+      userId: apiKey.accountId ?? undefined,
       apiKeyId: apiKey.id,
       rateLimit: rateLimit,
     };
@@ -84,7 +84,7 @@ export async function storeApiKeyAccessLog(params: {
   try {
     await db.insert(apiKeyAccessLogs).values({
       apiKeyId: params.apiKeyId,
-      userId: params.userId,
+      accountId: params.userId,
       endpoint: params.endpoint,
       method: params.method,
       statusCode: params.statusCode,

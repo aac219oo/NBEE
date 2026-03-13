@@ -1,4 +1,3 @@
 export * from "./2fa";
-export * from "./developers";
 export * from "./password-reset";
-export * from "./user";
+// Note: accounts is exported separately in parent index.ts to avoid including it in tenant DBs

@@ -3,7 +3,6 @@ import NextAuth, { CredentialsSignin, type DefaultSession, type User } from "nex
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
 
 // Extend types
 declare module "next-auth" {
@@ -44,7 +43,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async signIn({ user, account, profile }) {
-      // Original Logic from Core
       try {
         if (!account || account.provider === "credentials") return true;
 
@@ -53,42 +51,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           .trim();
         if (!email) return true;
 
+        const { getAccountByEmail } = await import("@heiso/core/lib/platform/account-adapter");
+        const account_ = await getAccountByEmail(email);
+        if (!account_) return true;
+
         const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
         const db = await getDynamicDb();
-
-        const { users, members } = await import("@heiso/core/lib/db/schema");
+        const { members } = await import("@heiso/core/lib/db/schema");
         const { and, eq, isNull } = await import("drizzle-orm");
 
+        // 查找成員
         const existingMember = await db.query.members.findFirst({
           where: (t, ops) =>
-            ops.and(ops.eq(t.email, email), ops.isNull(t.deletedAt)),
-          columns: { id: true, status: true, userId: true, roleId: true },
+            ops.and(ops.eq(t.accountId, account_.id), ops.isNull(t.deletedAt)),
+          columns: { id: true, status: true, accountId: true, roleId: true },
         });
 
-        const existingUser = await db.query.users.findFirst({
-          where: (t, ops) => ops.eq(t.email, email),
-          columns: { id: true, loginMethod: true },
-        });
-
-        if (
-          existingUser &&
-          existingMember &&
-          existingMember.status === "invited"
-        ) {
-          await db
-            .update(users)
-            .set({
-              mustChangePassword: false,
-              updatedAt: new Date(),
-            })
-            .where(and(eq(users.id, existingUser.id)));
-
+        // 若成員狀態為 invited，更新為 active
+        if (existingMember && existingMember.status === "invited") {
           await db
             .update(members)
             .set({
               inviteToken: "",
-              tokenExpiredAt: null,
-              status: "joined",
+              inviteExpiredAt: null,
+              status: "active",
               updatedAt: new Date(),
             })
             .where(
@@ -115,13 +101,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       try {
-        const userId = token.sub;
-        const email = (token as any).email as string | undefined;
-        const { findMembershipByUserOrEmail } = await import(
-          "@heiso/core/modules/account/authentication/_server/auth.service"
-        );
-        const membership = await findMembershipByUserOrEmail({ userId, email });
-        (token as any).memberStatus = membership?.status ?? null;
+        const accountId = token.sub;
+        if (accountId) {
+          const { findMembershipByAccountId } = await import(
+            "@heiso/core/modules/account/authentication/_server/auth.service"
+          );
+          const membership = await findMembershipByAccountId(accountId);
+          (token as any).memberStatus = membership?.status ?? null;
+        }
       } catch (e) {
         console.warn("[jwt] attach memberStatus failed:", e);
       }
@@ -140,7 +127,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Admin User Strategy: Grant All Permissions
       if (token.isAdminUser) {
         session.member = {
-          status: 'joined',
+          status: 'active',
           isOwner: true,
           roleName: 'Admin',
           fullAccess: true,
@@ -149,27 +136,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
 
       try {
-        const userId = session.user?.id;
-        const email = session.user?.email ?? undefined;
-        if (userId || email) {
-          const { findMembershipByUserOrEmail } = await import(
+        const accountId = session.user?.id;
+        console.log("[session] accountId:", accountId);
+        if (accountId) {
+          const { findMembershipByAccountId } = await import(
             "@heiso/core/modules/account/authentication/_server/auth.service"
           );
-          const membership = await findMembershipByUserOrEmail({
-            userId,
-            email,
-          });
-
-          if (membership?.userId) {
-            session.user.id = membership.userId;
-            session.user.email = membership.email ?? session.user.email;
-          }
+          const membership = await findMembershipByAccountId(accountId);
+          console.log("[session] membership:", membership);
 
           session.member = {
             status: membership?.status ?? null,
-            isOwner: !!membership?.isOwner,
-            roleName: membership?.role?.name ?? null,
-            fullAccess: !!membership?.role?.fullAccess || !!membership?.isOwner,
+            isOwner: membership?.role === 'owner',
+            roleName: membership?.role ?? null,
+            fullAccess: membership?.role === 'owner' || membership?.role === 'admin',
           };
         }
       } catch (e) {
@@ -208,7 +188,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return;
       }
 
-      // Original OAuth Logic
+      // OAuth Logic
       try {
         if (!account || account.provider === "credentials") return;
 
@@ -219,83 +199,47 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!email) return;
 
+        const { getAccountByEmail } = await import("@heiso/core/lib/platform/account-adapter");
+        const existingAccount = await getAccountByEmail(email);
+
+        if (!existingAccount) {
+          // Core 模式：需要先創建帳號
+          // APPS 模式：帳號需要在 Platform DB 建立
+          console.warn("[OAuth signIn] Account not found, needs to be created");
+          return;
+        }
+
         const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
-        const { users, members } = await import("@heiso/core/lib/db/schema");
-        const { and, eq, isNull } = await import("drizzle-orm");
-        const { hashPassword } = await import("@heiso/core/lib/hash");
-        const { generateId } = await import("@heiso/core/lib/id-generator");
-
-        const tenantId = await getTenantId();
-
+        const { members } = await import("@heiso/core/lib/db/schema");
+        const { eq } = await import("drizzle-orm");
         const db = await getDynamicDb();
 
-        const existingUser = await db.query.users.findFirst({
-          where: (t, _ops) => eq(t.email, email),
+        // 查找成員
+        const existingMember = await db.query.members.findFirst({
+          where: (t, ops) => ops.and(ops.eq(t.accountId, existingAccount.id), ops.isNull(t.deletedAt)),
         });
 
-        let existingMember: any = null;
-        if (tenantId) {
-          existingMember = await db.query.members.findFirst({
-            where: (t, _ops) => and(eq(t.email, email), isNull(t.deletedAt), eq(t.tenantId, tenantId)),
-          });
-        }
-
-        let userId = existingUser?.id;
-        if (!existingUser) {
-          const placeholderPassword = await hashPassword(
-            generateId(undefined, 32),
-          );
-          const displayName = (user?.name || (profile && (profile as any).name) || email.split("@")[0]).toString();
-          const avatar = (user as any)?.image || (profile as any)?.avatar_url || (profile as any)?.picture || null;
-
-          const inserted = await db
-            .insert(users)
-            .values({
-              email,
-              name: displayName,
-              password: placeholderPassword,
-              avatar: avatar ?? undefined,
-              active: false,
-              lastLoginAt: new Date(),
-              loginMethod: account.provider,
-              mustChangePassword: false,
-              updatedAt: new Date(),
-            })
-            .returning();
-
-          userId = inserted?.[0]?.id;
-        } else {
+        if (existingMember) {
+          // 更新成員
           await db
-            .update(users)
-            .set({ lastLoginAt: new Date(), updatedAt: new Date() })
-            .where(eq(users.id, existingUser.id));
-        }
+            .update(members)
+            .set({ updatedAt: new Date() })
+            .where(eq(members.id, existingMember.id));
+        } else {
+          // 建立成員
+          const hasAnyMember = await db.query.members.findFirst({
+            where: (t, { isNull }) => isNull(t.deletedAt),
+            columns: { id: true },
+          });
+          const isFirstMember = !hasAnyMember;
 
-        if (tenantId) {
-          if (existingMember) {
-            await db
-              .update(members)
-              .set({ userId: userId ?? existingMember.userId, updatedAt: new Date() })
-              .where(eq(members.id, existingMember.id));
-          } else {
-            const hasAnyMember = await db.query.members.findFirst({
-              where: (t, { eq, and, isNull }) => and(eq(t.tenantId, tenantId), isNull(t.deletedAt)),
-              columns: { id: true },
+          await db
+            .insert(members)
+            .values({
+              accountId: existingAccount.id,
+              status: isFirstMember ? "active" : "invited",
+              role: isFirstMember ? 'owner' : 'member',
             });
-            const isFirstMember = !hasAnyMember;
-            await db
-              .insert(members)
-              .values({
-                email,
-                userId: userId ?? undefined,
-                loginMethod: account.provider,
-                status: isFirstMember ? "joined" : "review",
-                isOwner: isFirstMember,
-                updatedAt: new Date(),
-                tenantId,
-              })
-              .returning();
-          }
         }
       } catch (err) {
         console.error("[OAuth signIn] member upsert failed:", err);
@@ -325,55 +269,59 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials, _req) {
         if (credentials?.otpVerified === "true") {
           const email = String(credentials?.email || "");
-          const userId = String(credentials?.userId || "");
-          if (!email || !userId) throw new InvalidLoginError();
-          const { getUser } = await import("./_server/user.service");
-          const user = await getUser(email);
-          if (!user || user.id !== userId) throw new InvalidLoginError();
+          const accountId = String(credentials?.userId || "");
+          if (!email || !accountId) throw new InvalidLoginError();
+
+          const { getAccount } = await import("./_server/user.service");
+          const account = await getAccount(accountId);
+          if (!account || account.email !== email) throw new InvalidLoginError();
 
           // DevLogin OTP: Grant admin permissions for allowed emails
           const isDevLogin = credentials?.isDevLogin === "true";
           const isAllowedDevEmail = ALLOWED_DEV_EMAILS.includes(email);
 
           return {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            isDeveloper: (isDevLogin && isAllowedDevEmail) ? true : !!user?.developer,
+            id: account.id,
+            name: account.name,
+            email: account.email,
+            isDeveloper: (isDevLogin && isAllowedDevEmail),
             isAdminUser: (isDevLogin && isAllowedDevEmail) ? true : undefined,
           };
         }
 
         if (!credentials?.username || !credentials?.password) throw new InvalidLoginError();
         const { username, password } = <{ username: string; password: string }>credentials;
-        const { getUser } = await import("./_server/user.service");
 
-        // 1. Try Core User
-        let user = await getUser(username);
+        // 1. Try Account (根據 APP_MODE 使用 accounts 或 foreignAccounts)
+        const {
+          getAccountByEmail,
+          verifyPassword: verifyAccountPassword,
+        } = await import("@heiso/core/lib/platform/account-adapter");
 
-        if (user) {
-          const isMatch = await verifyPassword(password, user.password);
-          if (isMatch) {
-            // Only grant Super Admin if this request specifically came from Dev Login page
-            // and we are in Core Mode for pm@heiso.io
-            const isRefDevLogin = (credentials as any)?.isDevLogin === "true";
-            const isCoreAdminBypass =
-              process.env.APP_MODE === "core" &&
-              ALLOWED_DEV_EMAILS.includes(username) &&
-              isRefDevLogin;
-
-            return {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              isDeveloper: isCoreAdminBypass ? true : !!user?.developer,
-              isAdminUser: isCoreAdminBypass ? true : !!(user as any)?.isAdminUser,
-            };
+        let account = null;
+        try {
+          account = await getAccountByEmail(username);
+          if (account) {
+            // Core 模式：直接驗證密碼
+            // APPS 模式：會拋出錯誤（需要 Platform API）
+            const isPasswordValid = await verifyAccountPassword(username, password);
+            if (isPasswordValid) {
+              return {
+                id: account.id,
+                name: account.name,
+                email: account.email,
+                isDeveloper: false,
+                isAdminUser: false,
+              } as User;
+            }
           }
+        } catch (e) {
+          // CMS 模式下會拋出錯誤，繼續嘗試其他方式
+          console.warn("[Credentials] Account adapter failed:", e);
         }
 
         // 2. Try Hive Admin User (Skip in Core Mode)
-        if (!user && process.env.APP_MODE !== "core") {
+        if (process.env.APP_MODE !== "core") {
           try {
             const { getAdminAuthAdapter } = await import("@heiso/core/lib/adapters");
             const adminAuth = getAdminAuthAdapter();
@@ -397,10 +345,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
         }
 
-        if (!user) throw new InvalidLoginError();
-        const isMatch = await verifyPassword(password, user.password);
-        if (!isMatch) throw new InvalidLoginError();
-        return { id: user.id, name: user.name, email: user.email, isDeveloper: !!user?.developer };
+        // 3. Dev Login bypass for allowed emails
+        const isRefDevLogin = (credentials as any)?.isDevLogin === "true";
+        const isCoreAdminBypass =
+          process.env.APP_MODE === "core" &&
+          ALLOWED_DEV_EMAILS.includes(username) &&
+          isRefDevLogin;
+
+        if (isCoreAdminBypass && account) {
+          return {
+            id: account.id,
+            name: account.name ?? username,
+            email: account.email ?? username,
+            isDeveloper: true,
+            isAdminUser: true,
+          };
+        }
+
+        throw new InvalidLoginError();
       },
     }),
   ],

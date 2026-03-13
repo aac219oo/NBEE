@@ -16,16 +16,18 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user) return null;
 
+  /* 
   const me = await getUser();
   if (me?.mustChangePassword) {
     redirect("/auth/change-password");
   }
+  */
 
   const membership = await getMyMembership();
   const hasFullAccess =
     membership.isDeveloper === true ||
-    membership.isOwner === true ||
-    membership.role?.fullAccess === true;
+    membership.role === 'owner' ||
+    (membership.role as any)?.fullAccess === true;
 
   // Get allowed menu IDs and build navigation from static config
   const allowedMenuIds = await getMyAllowedMenuIds({

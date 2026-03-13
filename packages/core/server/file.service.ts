@@ -5,7 +5,6 @@ import { fileStorageCategories, files } from "@heiso/core/lib/db/schema";
 import { generateId } from "@heiso/core/lib/id-generator";
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { eq, sql } from "drizzle-orm";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
 
 function detectFileType(rawType: string) {
   const mimeToType: Record<string, string> = {
@@ -49,14 +48,9 @@ export async function saveFile(file: {
 }) {
   const db = await getDynamicDb();
   const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) {
+  const accountId = session?.user?.id;
+  if (!accountId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const tenantId = await getTenantId();
-  if (!tenantId) {
-    return Response.json({ error: "Tenant context missing" }, { status: 400 });
   }
 
   if (!file) {
@@ -68,12 +62,11 @@ export async function saveFile(file: {
   const categoryDefault = CATEGORY_DEFAULTS[fileType] || CATEGORY_DEFAULTS.other;
 
   const result = await db.transaction(async (tx) => {
-    // Upsert storage category for this tenant
+    // Upsert storage category
     await tx
       .insert(fileStorageCategories)
       .values({
         id: fileType,
-        tenantId,
         name: categoryDefault.name,
         icon: categoryDefault.icon,
         color: categoryDefault.color,
@@ -81,19 +74,17 @@ export async function saveFile(file: {
         size: file.size,
       })
       .onConflictDoUpdate({
-        target: [fileStorageCategories.tenantId, fileStorageCategories.id],
+        target: fileStorageCategories.id,
         set: {
           fileCount: sql`${fileStorageCategories.fileCount} + 1`,
           size: sql`${fileStorageCategories.size} + ${file.size}`,
         },
-        where: sql`${fileStorageCategories.tenantId} = ${tenantId}`,
       });
 
     const [fileRecord] = await tx
       .insert(files)
       .values({
         id: generateId(),
-        tenantId,
         name: file.name,
         size: file.size,
         type: fileType,
@@ -102,7 +93,7 @@ export async function saveFile(file: {
         path: "",
         mimeType: file.type,
         metadata: {},
-        ownerId: userId,
+        ownerId: accountId,
         storageCategoryId: fileType,
       })
       .returning();

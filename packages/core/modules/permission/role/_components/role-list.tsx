@@ -45,7 +45,6 @@ import { Separator } from "@heiso/core/components/ui/separator";
 import { Textarea } from "@heiso/core/components/ui/textarea";
 import type { TMenu } from "@heiso/core/lib/db/schema";
 import { cn } from "@heiso/core/lib/utils";
-import { LoginMethodEnum } from "@heiso/core/modules/auth/_components/loginForm";
 import { useAccount } from "@heiso/core/providers/account";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -160,9 +159,6 @@ function RoleItemCollapsible({
   const [name, setName] = useState<string>(role.name || "");
   const [description, setDescription] = useState<string>(
     role.description || "",
-  );
-  const [loginMethod, setLoginMethod] = useState<string>(
-    role.loginMethod || LoginMethodEnum.Both,
   );
   const [fullAccessEditing, setFullAccessEditing] = useState<boolean>(
     role.fullAccess ?? false,
@@ -294,7 +290,6 @@ function RoleItemCollapsible({
         name,
         description,
         fullAccess: fullAccessEditing,
-        loginMethod: loginMethod,
       });
       await assignMenus({ roleId: role.id, menus: selectedMenus });
       await assignPermissions({
@@ -353,28 +348,9 @@ function RoleItemCollapsible({
             )}
           </div>
         </CollapsibleTrigger>
-        {/* Setting user loginMethod*/}
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          {isEditing ? (
-            <Select value={loginMethod} onValueChange={setLoginMethod}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder={t("form.method.description")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>{t("form.method.title")}</SelectLabel>
-                  {Object.values(LoginMethodEnum).map((methodValue) => (
-                    <SelectItem key={methodValue} value={methodValue}>
-                      {t(`form.method.${methodValue}`)}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          ) : (
-            <span>{`${t(`form.method.${loginMethod}`)}`}</span>
-          )}
-        </div>
+        {/* Login method selector removed - managed at platform level */}
+        <div className="flex items-center gap-2 text-muted-foreground text-sm" />
+
 
         <div className="flex items-center">
           {!isEditing ? (
@@ -529,7 +505,6 @@ function CreateOrUpdateRole({
   const formSchema = z.object({
     name: z.string().min(1, { message: t("validation.name_required") }),
     description: z.string().optional(),
-    loginMethod: z.string(),
     fullAccess: z.boolean().optional(),
   });
 
@@ -537,7 +512,6 @@ function CreateOrUpdateRole({
     resolver: zodResolver(formSchema),
     defaultValues: {
       fullAccess: false,
-      loginMethod: LoginMethodEnum.Both,
     },
   });
 
@@ -546,7 +520,6 @@ function CreateOrUpdateRole({
       form.setValue("name", data.name);
       form.setValue("description", data.description ?? "");
       form.setValue("fullAccess", data.fullAccess ?? false);
-      form.setValue("loginMethod", data.loginMethod ?? LoginMethodEnum.Both);
     }
   }, [data, form]);
 
@@ -598,31 +571,6 @@ function CreateOrUpdateRole({
                   <FormLabel>{t("description")}</FormLabel>
                   <FormControl>
                     <Textarea placeholder={t("description")} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="loginMethod"
-              defaultValue=""
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("method.title")}</FormLabel>
-                  <FormControl>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t("method.description")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.values(LoginMethodEnum).map((methodValue) => (
-                          <SelectItem key={methodValue} value={methodValue}>
-                            {t(`method.${methodValue}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

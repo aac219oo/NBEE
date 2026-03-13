@@ -61,12 +61,72 @@ export interface AdminAuthAdapter {
     updatePassword(email: string, passwordHash: string): Promise<void>;
 }
 
+/**
+ * PlatformAccountAdapter - Handles platform account operations.
+ * Used for account creation, updates, and password verification in CMS mode.
+ */
+export interface PlatformAccountAdapter {
+    /**
+     * Create a new account in Platform DB
+     */
+    createAccount(data: {
+        email: string;
+        name: string;
+        password: string;
+        active?: boolean;
+    }): Promise<{
+        id: string;
+        email: string;
+        name: string;
+    }>;
+
+    /**
+     * Update account information
+     */
+    updateAccount(id: string, data: {
+        name?: string;
+        avatar?: string;
+        email?: string;
+        active?: boolean;
+    }): Promise<void>;
+
+    /**
+     * Verify password for authentication
+     */
+    verifyPassword(email: string, password: string): Promise<boolean>;
+
+    /**
+     * Get account by email (includes password for authentication)
+     */
+    getAccountByEmail(email: string): Promise<{
+        id: string;
+        email: string;
+        name: string;
+        password: string;
+        active: boolean;
+        avatar?: string | null;
+        lastLoginAt?: Date | null;
+    } | null>;
+
+    /**
+     * Get account by ID (excludes password)
+     */
+    getAccountById(id: string): Promise<{
+        id: string;
+        email: string;
+        name: string;
+        active: boolean;
+        avatar?: string | null;
+    } | null>;
+}
+
 // ============================================================================
 // Registry (Singleton Pattern)
 // ============================================================================
 
 let tenantAdapter: TenantAdapter | null = null;
 let adminAuthAdapter: AdminAuthAdapter | null = null;
+let platformAccountAdapter: PlatformAccountAdapter | null = null;
 
 /**
  * Register a TenantAdapter implementation.
@@ -85,6 +145,14 @@ export function registerAdminAuthAdapter(adapter: AdminAuthAdapter): void {
 }
 
 /**
+ * Register a PlatformAccountAdapter implementation.
+ * Call this at application bootstrap (e.g., in CMS app).
+ */
+export function registerPlatformAccountAdapter(adapter: PlatformAccountAdapter): void {
+    platformAccountAdapter = adapter;
+}
+
+/**
  * Get the registered TenantAdapter.
  * Returns null if no adapter has been registered (feature disabled).
  */
@@ -98,6 +166,14 @@ export function getTenantAdapter(): TenantAdapter | null {
  */
 export function getAdminAuthAdapter(): AdminAuthAdapter | null {
     return adminAuthAdapter;
+}
+
+/**
+ * Get the registered PlatformAccountAdapter.
+ * Returns null if no adapter has been registered (feature disabled).
+ */
+export function getPlatformAccountAdapter(): PlatformAccountAdapter | null {
+    return platformAccountAdapter;
 }
 
 /**

@@ -11,6 +11,7 @@ export function generateId(prefix?: string, length: number = 10) {
 }
 
 export const generateUserId = () => generateId("u");
+export const generateAccountId = () => generateId("u");
 export const generateRoleId = () => generateId("ro");
 export const generatePermissionId = () => generateId("pe");
 export const generateNavigationId = () => generateId("n");

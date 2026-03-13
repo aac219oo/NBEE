@@ -1,12 +1,10 @@
 import { generateId } from "@heiso/core/lib/id-generator";
 import { relations } from "drizzle-orm";
 import {
-  boolean,
   index,
   pgTable,
   timestamp,
   varchar,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import {
   createInsertSchema,
@@ -14,47 +12,60 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import type zod from "zod";
-import { sql } from "drizzle-orm";
-import { users } from "../auth";
 import { roles } from "./role";
+import { type Role, type MemberStatus } from "@heiso/core/types/member";
 
+/**
+ * members 表 - 租戶成員資格
+ *
+ * 關聯到 Platform.accounts (透過 FDW)
+ * 已移除冗餘欄位 (email, loginMethod)
+ */
 export const members = pgTable(
   "members",
   {
     id: varchar("id", { length: 20 })
       .primaryKey()
       .$default(() => generateId()),
-    tenantId: varchar("tenant_id", { length: 50 }).notNull(), // Shared DB RLS discriminator
-    userId: varchar("user_id", { length: 20 }).references(() => users.id),
-    email: varchar("email", { length: 100 }).notNull(),
+
+    // 關聯到 Platform.accounts (透過 FDW)
+    // TODO: 資料遷移後改回 .notNull()
+    accountId: varchar("account_id", { length: 50 }),
+
+    // 系統角色 (owner/admin/member)
+    role: varchar("role", { length: 20 })
+      .notNull()
+      .default("member")
+      .$type<Role>(),
+
+    // member 自訂權限角色 (可選，用於額外的細粒度權限控制)
     roleId: varchar("role_id", { length: 20 }).references(() => roles.id),
-    inviteToken: varchar("invite_token", { length: 20 }),
-    tokenExpiredAt: timestamp("token_expired_at"),
-    isOwner: boolean("is_owner").notNull().default(false),
-    loginMethod: varchar("login_method", { length: 20 }),
-    status: varchar("status", { length: 20 }).default("invited"),
+
+    // 成員狀態
+    status: varchar("status", { length: 20 })
+      .notNull()
+      .default("invited")
+      .$type<MemberStatus>(),
+
+    // 邀請相關
+    inviteToken: varchar("invite_token", { length: 50 }),
+    inviteExpiredAt: timestamp("invite_expired_at"),
+
+    // Timestamps
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
-    // Index for invite token lookups
-    index("org_members_invite_token_idx").on(table.inviteToken),
-    // RLS Policy
-    pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`tenant_id = current_setting('app.current_tenant_id', true)`,
-      withCheck: sql`tenant_id = current_setting('app.current_tenant_id', true)`,
-    }),
+    index("members_account_id_idx").on(table.accountId),
+    index("members_role_idx").on(table.role),
+    index("members_role_id_idx").on(table.roleId),
+    index("members_status_idx").on(table.status),
+    index("members_invite_token_idx").on(table.inviteToken),
   ],
 );
 
-export const orgMembersRelations = relations(members, ({ one }) => ({
-  user: one(users, {
-    fields: [members.userId],
-    references: [users.id],
-  }),
+export const membersRelations = relations(members, ({ one }) => ({
   role: one(roles, {
     fields: [members.roleId],
     references: [roles.id],

@@ -2,14 +2,10 @@ import {
   boolean,
   index,
   json,
-  pgPolicy,
   pgTable,
-  primaryKey,
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-import { tenantSchema } from "../utils";
 import {
   createInsertSchema,
   createSelectSchema,
@@ -17,37 +13,43 @@ import {
 } from "drizzle-zod";
 import type zod from "zod";
 
+/**
+ * settings 表 - 合併版
+ *
+ * 用於存放所有系統設定，用 group 區分用途：
+ * - 'system': 後端系統設定（含 tenantId 識別）
+ * - 'site': 前端網站設定（原 siteSettings）
+ * - 'general': 一般設定
+ * - 其他自定義分組...
+ *
+ * 特殊設定：
+ * - name='tenantId', group='system': 用於識別此 DB 所屬租戶
+ */
 export const settings = pgTable(
   "settings",
   {
-    ...tenantSchema,
-    name: varchar("name", { length: 100 }).notNull(),
+    // 主鍵
+    name: varchar("name", { length: 100 }).notNull().primaryKey(),
+
+    // 值
     value: json("value").notNull(),
-    isKey: boolean("is_key").notNull().default(false),
+
+    // 分組與元資料
+    group: varchar("group", { length: 50 }),
     description: varchar("description", { length: 255 }),
-    group: varchar("group", { length: 20 }),
+    isKey: boolean("is_key").notNull().default(false),
+
+    // Timestamps
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (t) => ({
-    pk: primaryKey({ columns: [t.tenantId, t.name] }),
-    settingsGroupIdx: index("settings_group_idx").on(t.group),
-    settingsIsKeyIdx: index("settings_is_key_idx").on(t.isKey),
-    settingsDeletedAtIdx: index("settings_deleted_at_idx").on(t.deletedAt),
-    policy: pgPolicy("tenant_isolation", {
-      for: "all",
-      to: "public",
-      using: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-      withCheck: sql`${t.tenantId} = current_setting('app.current_tenant_id')`,
-    }),
-  }),
+  (table) => [
+    index("settings_group_idx").on(table.group),
+    index("settings_is_key_idx").on(table.isKey),
+    index("settings_deleted_at_idx").on(table.deletedAt),
+  ],
 );
-
-export const enableSettingRls = sql`
-  ALTER TABLE "settings" ENABLE ROW LEVEL SECURITY;
-  ALTER TABLE "settings" FORCE ROW LEVEL SECURITY;
-`;
 
 export const settingsSchema = createSelectSchema(settings);
 export const settingsInsertSchema = createInsertSchema(settings);

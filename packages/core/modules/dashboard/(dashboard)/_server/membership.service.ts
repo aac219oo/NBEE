@@ -2,10 +2,11 @@
 
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import type { TPermission } from "@heiso/core/lib/db/schema";
-import { roleMenus } from "@heiso/core/lib/db/schema";
+import { roleMenus, foreignAccounts, accounts } from "@heiso/core/lib/db/schema";
 import { auth } from "@heiso/core/modules/auth/auth.config";
-import { eq, sql } from "drizzle-orm";
-import { getTenantId } from "@heiso/core/lib/utils/tenant";
+import { eq, and, isNull } from "drizzle-orm";
+
+const isCoreMode = () => process.env.APP_MODE === "core";
 
 // Types
 type AccessParams = {
@@ -16,78 +17,118 @@ type AccessParams = {
 // Error messages
 const UNAUTHORIZED_ERROR = "Unauthorized";
 
-async function getUser() {
+/**
+ * 取得當前帳號資訊
+ * Core 模式：使用本地 accounts 表
+ * APPS 模式：使用 FDW foreignAccounts
+ */
+async function getAccount() {
   const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) throw new Error(UNAUTHORIZED_ERROR);
+  const accountId = session?.user?.id;
+  if (!accountId) throw new Error(UNAUTHORIZED_ERROR);
 
   const db = await getDynamicDb();
-  const user = await db.query.users.findFirst({
-    columns: { id: true, mustChangePassword: true },
-    where: (t, { eq }) => eq(t.id, userId),
-  });
 
-  return user;
+  if (isCoreMode()) {
+    const account = await db.query.accounts.findFirst({
+      columns: {
+        id: true,
+        email: true,
+        name: true,
+      },
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
+    return account ?? null;
+  } else {
+    const [account] = await db
+      .select({
+        id: foreignAccounts.id,
+        email: foreignAccounts.email,
+        name: foreignAccounts.name,
+      })
+      .from(foreignAccounts)
+      .where(eq(foreignAccounts.id, accountId))
+      .limit(1);
+
+    return account ?? null;
+  }
 }
 
+/**
+ * 取得當前帳號的成員資格
+ * Core 模式：使用 accounts 表
+ * APPS 模式：使用 members 表
+ */
 async function getMyMembership() {
   const session = await auth();
-  const userId = session?.user?.id;
-  if (!userId) throw new Error(UNAUTHORIZED_ERROR);
-
-  const tenantId = await getTenantId();
-  console.log("[DEBUG] getMyMembership userId:", userId, "tenantId:", tenantId);
-
-  if (!tenantId) return { isDeveloper: false };
+  const accountId = session?.user?.id;
+  if (!accountId) throw new Error(UNAUTHORIZED_ERROR);
 
   const db = await getDynamicDb();
+  const isDeveloper = session?.user?.isDeveloper ?? false;
 
-  return await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`);
-
-    const [user, membership] = await Promise.all([
-      tx.query.users.findFirst({
-        columns: { id: true },
-        with: { developer: true },
-        where: (t, { eq }) => eq(t.id, userId),
-      }),
-      tx.query.members.findFirst({
-        columns: {
-          id: true,
-          roleId: true,
-          isOwner: true,
-          status: true,
-          tenantId: true
-        },
-        with: {
-          role: {
-            columns: {
-              id: true,
-              fullAccess: true,
-            },
+  if (isCoreMode()) {
+    const account = await db.query.accounts.findFirst({
+      columns: {
+        id: true,
+        roleId: true,
+        role: true,
+        status: true,
+      },
+      with: {
+        customRole: {
+          columns: {
+            id: true,
+            fullAccess: true,
           },
         },
-        where: (t, { and, eq, isNull }) =>
-          and(eq(t.userId, userId), isNull(t.deletedAt), eq(t.tenantId, tenantId)), // Explicit tenant filter + RLS
-      }),
-    ]);
-
-    console.log("[DEBUG] getMyMembership found:", membership?.id, "roleId:", membership?.roleId);
+      },
+      where: (t, { eq, isNull }) =>
+        and(eq(t.id, accountId), isNull(t.deletedAt)),
+    });
 
     return {
-      isDeveloper: user?.developer !== null,
+      isDeveloper,
+      id: account?.id,
+      accountId: account?.id,
+      roleId: account?.roleId,
+      role: account?.role,
+      status: account?.status,
+      customRole: account?.customRole,
+    };
+  } else {
+    const membership = await db.query.members.findFirst({
+      columns: {
+        id: true,
+        roleId: true,
+        role: true,
+        status: true,
+        accountId: true,
+      },
+      with: {
+        role: {
+          columns: {
+            id: true,
+            fullAccess: true,
+          },
+        },
+      },
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+    });
+
+    return {
+      isDeveloper,
       ...membership,
     };
-  });
+  }
 }
 
 /**
  * Returns allowed menu IDs for the current user.
  * - If fullAccess is true, returns null (indicating all menus are allowed)
  * - Otherwise, returns an array of menu IDs from role_menus table
- *
- * Note: The actual menu definitions are now in dashboard-config.ts (static config).
- * This function only handles permission filtering.
  */
 async function getMyAllowedMenuIds({
   fullAccess,
@@ -95,39 +136,30 @@ async function getMyAllowedMenuIds({
 }: AccessParams): Promise<string[] | null> {
   // Full access means all menus are allowed
   if (fullAccess) {
-    console.log("[DEBUG] getMyAllowedMenuIds: fullAccess granted");
     return null;
   }
 
   if (!roleId) {
-    console.log("[DEBUG] getMyAllowedMenuIds: no roleId, returning empty");
     return [];
   }
 
-  const tenantId = await getTenantId();
-  console.log("[DEBUG] getMyAllowedMenuIds tenantId:", tenantId, "roleId:", roleId);
-
-  if (!tenantId) return [];
-
   const db = await getDynamicDb();
 
-  return await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${tenantId}, true)`);
+  // Query role_menus to get allowed menu IDs
+  const roleMenusData = await db
+    .select({
+      menuId: roleMenus.menuId,
+    })
+    .from(roleMenus)
+    .where(eq(roleMenus.roleId, roleId));
 
-    // Query role_menus to get allowed menu IDs
-    const roleMenusData = await tx
-      .select({
-        menuId: roleMenus.menuId,
-      })
-      .from(roleMenus)
-      .where(eq(roleMenus.roleId, roleId));
-
-    const menuIds = roleMenusData.map((item) => item.menuId);
-    console.log("[DEBUG] getMyAllowedMenuIds found:", menuIds);
-    return menuIds;
-  });
+  const menuIds = roleMenusData.map((item) => item.menuId);
+  return menuIds;
 }
 
+/**
+ * 取得組織權限
+ */
 async function getMyOrgPermissions({
   fullAccess,
   roleId,
@@ -142,7 +174,7 @@ async function getMyOrgPermissions({
         resource: true,
         action: true,
       },
-      where: (t, { and, isNull }) => and(isNull(t.deletedAt)),
+      where: (t, { isNull }) => isNull(t.deletedAt),
       orderBy: (t, { asc }) => [asc(t.createdAt)],
     });
   }
@@ -162,4 +194,6 @@ async function getMyOrgPermissions({
   return rolePermissionsResult.map((item) => item.permission).filter(Boolean);
 }
 
-export { getUser, getMyMembership, getMyAllowedMenuIds, getMyOrgPermissions };
+const getUser = getAccount;
+
+export { getAccount, getUser, getMyMembership, getMyAllowedMenuIds, getMyOrgPermissions };

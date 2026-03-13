@@ -18,9 +18,9 @@ import {
 } from "@heiso/core/components/ui/select";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import type { Member } from "../_server/team.service";
+import { type Member } from "../types";
 import type { Role } from "./member-list";
-import { MemberStatus, MemberUser } from "./member-list";
+import { MemberUser } from "./member-list";
 
 type Props = {
   open: boolean;
@@ -28,7 +28,7 @@ type Props = {
   roles: Role[];
   pending?: boolean;
   onClose: () => void;
-  onApprove: (roleId: string | null, isOwner: boolean) => void;
+  onApprove: (roleId: string | null, role: 'owner' | 'admin' | 'member') => void;
   onReject: () => void;
 };
 
@@ -43,18 +43,17 @@ export const ConfirmReviewMember = ({
 }: Props) => {
   const t = useTranslations("dashboard.permission.message.review");
   const labelT = useTranslations("dashboard.permission.team.invite");
+  // The member.role here is the TRole relation, member.role (the column) has type 'owner' | 'admin' | 'member'
+  const memberRole = member.role as unknown as { id: string } | null;
   const [selectedRoleId, setSelectedRoleId] = useState<string>(
-    member.isOwner ? MemberStatus.Owner : member.role?.id || "",
+    memberRole?.id || "",
   );
 
   const handleApprove = () => {
     if (!selectedRoleId) return;
-    const isOwner = selectedRoleId === MemberStatus.Owner;
-    const roleId =
-      selectedRoleId === MemberStatus.Owner
-        ? null
-        : roles.find((r) => r.id === selectedRoleId)?.id || null;
-    onApprove(roleId, isOwner);
+    const roleId = roles.find((r) => r.id === selectedRoleId)?.id || null;
+    // Default to 'member' role when approving
+    onApprove(roleId, 'member');
   };
 
   return (
