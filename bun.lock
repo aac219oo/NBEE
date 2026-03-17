@@ -186,9 +186,6 @@
     "packages/core": {
       "name": "@heiso/core",
       "version": "0.1.0",
-      "dependencies": {
-        "@heiso/hive": "workspace:*",
-      },
       "devDependencies": {
         "@heiso/biome-config": "workspace:*",
         "@heiso/drizzle-config": "workspace:*",

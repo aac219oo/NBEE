@@ -2,9 +2,9 @@
 
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import type { TPermission } from "@heiso/core/lib/db/schema";
-import { roleMenus, foreignAccounts, accounts } from "@heiso/core/lib/db/schema";
+import { roleMenus, foreignAccounts } from "@heiso/core/lib/db/schema";
 import { auth } from "@heiso/core/modules/auth/auth.config";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const isCoreMode = () => process.env.APP_MODE === "core";
 
@@ -57,8 +57,7 @@ async function getAccount() {
 
 /**
  * 取得當前帳號的成員資格
- * Core 模式：使用 accounts 表
- * APPS 模式：使用 members 表
+ * 統一使用 accounts 表
  */
 async function getMyMembership() {
   const session = await auth();
@@ -68,61 +67,34 @@ async function getMyMembership() {
   const db = await getDynamicDb();
   const isDeveloper = session?.user?.isDeveloper ?? false;
 
-  if (isCoreMode()) {
-    const account = await db.query.accounts.findFirst({
-      columns: {
-        id: true,
-        roleId: true,
-        role: true,
-        status: true,
-      },
-      with: {
-        customRole: {
-          columns: {
-            id: true,
-            fullAccess: true,
-          },
+  const account = await db.query.accounts.findFirst({
+    columns: {
+      id: true,
+      roleId: true,
+      role: true,
+      status: true,
+    },
+    with: {
+      customRole: {
+        columns: {
+          id: true,
+          fullAccess: true,
         },
       },
-      where: (t, { eq, isNull }) =>
-        and(eq(t.id, accountId), isNull(t.deletedAt)),
-    });
+    },
+    where: (t, { eq, isNull }) =>
+      and(eq(t.id, accountId), isNull(t.deletedAt)),
+  });
 
-    return {
-      isDeveloper,
-      id: account?.id,
-      accountId: account?.id,
-      roleId: account?.roleId,
-      role: account?.role,
-      status: account?.status,
-      customRole: account?.customRole,
-    };
-  } else {
-    const membership = await db.query.members.findFirst({
-      columns: {
-        id: true,
-        roleId: true,
-        role: true,
-        status: true,
-        accountId: true,
-      },
-      with: {
-        role: {
-          columns: {
-            id: true,
-            fullAccess: true,
-          },
-        },
-      },
-      where: (t, { and, eq, isNull }) =>
-        and(eq(t.accountId, accountId), isNull(t.deletedAt)),
-    });
-
-    return {
-      isDeveloper,
-      ...membership,
-    };
-  }
+  return {
+    isDeveloper,
+    id: account?.id,
+    accountId: account?.id,
+    roleId: account?.roleId,
+    role: account?.role,
+    status: account?.status,
+    customRole: account?.customRole,
+  };
 }
 
 /**

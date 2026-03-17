@@ -46,27 +46,36 @@ export async function toggle2FA(accountId: string, enabled: boolean) {
 
 /**
  * 透過 accountId 查詢成員資格（含角色）
+ * 統一使用 accounts 表
  */
 export async function findMembershipByAccountId(accountId: string) {
   const db = await getDynamicDb();
 
-  const membership = await db.query.members.findFirst({
+  const account = await db.query.accounts.findFirst({
     columns: {
       id: true,
       status: true,
       role: true,
-      accountId: true,
+      roleId: true,
     },
     with: {
-      role: {
+      customRole: {
         columns: { id: true, name: true, fullAccess: true }
       }
     },
     where: (t, { and, eq, isNull }) =>
-      and(eq(t.accountId, accountId), isNull(t.deletedAt)),
+      and(eq(t.id, accountId), isNull(t.deletedAt)),
   });
 
-  return membership;
+  if (!account) return null;
+
+  return {
+    id: account.id,
+    accountId: account.id,
+    status: account.status,
+    role: account.role,
+    customRole: account.customRole,
+  };
 }
 
 /**

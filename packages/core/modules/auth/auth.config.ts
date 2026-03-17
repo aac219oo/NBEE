@@ -57,28 +57,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
         const db = await getDynamicDb();
-        const { members } = await import("@heiso/core/lib/db/schema");
         const { and, eq, isNull } = await import("drizzle-orm");
 
-        // 查找成員
-        const existingMember = await db.query.members.findFirst({
+        // 統一使用 accounts 表（Core 和 APPS 模式皆同）
+        const { accounts } = await import("@heiso/core/lib/db/schema");
+
+        const existingAccount = await db.query.accounts.findFirst({
           where: (t, ops) =>
-            ops.and(ops.eq(t.accountId, account_.id), ops.isNull(t.deletedAt)),
-          columns: { id: true, status: true, accountId: true, roleId: true },
+            ops.and(ops.eq(t.id, account_.id), ops.isNull(t.deletedAt)),
+          columns: { id: true, status: true, roleId: true },
         });
 
-        // 若成員狀態為 invited，更新為 active
-        if (existingMember && existingMember.status === "invited") {
+        // 若帳號狀態為 invited，更新為 active
+        if (existingAccount && existingAccount.status === "invited") {
           await db
-            .update(members)
+            .update(accounts)
             .set({
-              inviteToken: "",
+              inviteToken: null,
               inviteExpiredAt: null,
               status: "active",
+              joinedAt: new Date(),
               updatedAt: new Date(),
             })
             .where(
-              and(eq(members.id, existingMember.id), isNull(members.deletedAt)),
+              and(eq(accounts.id, existingAccount.id), isNull(accounts.deletedAt)),
             );
         }
 
@@ -88,11 +90,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return true;
       }
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.isDeveloper = (user as any).isDeveloper;
         token.isAdminUser = (user as any).isAdminUser;
         token.email = (user as any).email ?? (token as any).email;
+
+        // OAuth 登入：將 token.sub 替換為資料庫中的 account.id
+        if (account && account.provider !== "credentials") {
+          const email = (user.email || "").toString().trim();
+          if (email) {
+            try {
+              const { getAccountByEmail } = await import("@heiso/core/lib/platform/account-adapter");
+              const dbAccount = await getAccountByEmail(email);
+              if (dbAccount) {
+                token.sub = dbAccount.id;
+              }
+            } catch (e) {
+              console.warn("[jwt] OAuth account lookup failed:", e);
+            }
+          }
+        }
       }
 
       // Admin User Strategy: Skip Core membership check
@@ -210,36 +228,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
-        const { members } = await import("@heiso/core/lib/db/schema");
         const { eq } = await import("drizzle-orm");
         const db = await getDynamicDb();
 
-        // 查找成員
-        const existingMember = await db.query.members.findFirst({
-          where: (t, ops) => ops.and(ops.eq(t.accountId, existingAccount.id), ops.isNull(t.deletedAt)),
+        // 統一使用 accounts 表（Core 和 APPS 模式皆同）
+        const { accounts } = await import("@heiso/core/lib/db/schema");
+
+        // 查找帳號
+        const account_ = await db.query.accounts.findFirst({
+          where: (t, ops) => ops.and(ops.eq(t.id, existingAccount.id), ops.isNull(t.deletedAt)),
         });
 
-        if (existingMember) {
-          // 更新成員
+        if (account_) {
+          // 更新帳號
           await db
-            .update(members)
-            .set({ updatedAt: new Date() })
-            .where(eq(members.id, existingMember.id));
+            .update(accounts)
+            .set({ updatedAt: new Date(), lastLoginAt: new Date() })
+            .where(eq(accounts.id, account_.id));
         } else {
-          // 建立成員
-          const hasAnyMember = await db.query.members.findFirst({
-            where: (t, { isNull }) => isNull(t.deletedAt),
-            columns: { id: true },
-          });
-          const isFirstMember = !hasAnyMember;
-
-          await db
-            .insert(members)
-            .values({
-              accountId: existingAccount.id,
-              status: isFirstMember ? "active" : "invited",
-              role: isFirstMember ? 'owner' : 'member',
-            });
+          // 這種情況通常不會發生，因為 getAccountByEmail 已經找到帳號
+          console.warn("[OAuth signIn] Account record not found");
         }
       } catch (err) {
         console.error("[OAuth signIn] member upsert failed:", err);
@@ -302,8 +310,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           account = await getAccountByEmail(username);
           if (account) {
-            // Core 模式：直接驗證密碼
-            // APPS 模式：會拋出錯誤（需要 Platform API）
             const isPasswordValid = await verifyAccountPassword(username, password);
             if (isPasswordValid) {
               return {

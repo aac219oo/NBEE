@@ -2,8 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
 import postgres from "postgres";
 
-import * as dotenv from "dotenv";
-dotenv.config();
+// Bun automatically loads .env.local and .env files
 
 async function main() {
   const coreUrl = process.env.DATABASE_URL;
@@ -46,11 +45,21 @@ async function main() {
     OPTIONS (user '${user}', password '${password}');
   `));
 
-  // Import foreign table
+  // Create foreign table manually (避免與本地 accounts 表衝突)
+  await db.execute(sql`DROP FOREIGN TABLE IF EXISTS foreign_accounts;`);
+
   await db.execute(sql`
-    DROP FOREIGN TABLE IF EXISTS foreign_accounts;
-    IMPORT FOREIGN SCHEMA public LIMIT TO (accounts) FROM SERVER hive_server INTO public;
-    ALTER FOREIGN TABLE accounts RENAME TO foreign_accounts;
+    CREATE FOREIGN TABLE foreign_accounts (
+      id varchar(50) NOT NULL,
+      email varchar(255),
+      name varchar(100),
+      avatar varchar(255),
+      active boolean,
+      two_factor_enabled boolean,
+      last_login_at timestamp,
+      created_at timestamp,
+      updated_at timestamp
+    ) SERVER hive_server OPTIONS (schema_name 'public', table_name 'accounts');
   `);
 
   console.log("✅ FDW foreign_accounts table successfully created in Tenant DB.");

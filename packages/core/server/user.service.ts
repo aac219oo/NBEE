@@ -14,7 +14,7 @@ export { getAccountByEmailAdapter as getAccountByEmail };
 /**
  * Get all accounts
  * Core mode: From accounts table
- * CMS mode: From foreignAccounts (FDW) + members
+ * CMS mode: From foreignAccounts (FDW)
  */
 export async function getUsers() {
   const db = await getDynamicDb();
@@ -56,26 +56,43 @@ export async function getUserById(id: string) {
   return await getAccountById(id);
 }
 
+/**
+ * 透過邀請 token 取得邀請資訊
+ * 統一使用 accounts 表
+ */
 export async function getInvitation(token: string) {
   const db = await getDynamicDb();
-  const invitation = await db.query.members.findFirst({
+
+  const account = await db.query.accounts.findFirst({
     columns: {
       id: true,
-      accountId: true,
+      email: true,
+      name: true,
+      avatar: true,
+      inviteToken: true,
+      inviteExpiredAt: true,
+      status: true,
     },
-    where: (table, { eq }) => eq(table.inviteToken, token),
+    where: (table, { eq, isNull, and }) =>
+      and(eq(table.inviteToken, token), isNull(table.deletedAt)),
   });
 
-  if (!invitation || !invitation.accountId)
+  if (!account) {
     return {
       invitation: null,
       user: null,
     };
+  }
 
-  const user = await getAccountById(invitation.accountId);
   return {
-    invitation,
-    user,
+    invitation: {
+      id: account.id,
+      accountId: account.id,
+      inviteToken: account.inviteToken,
+      inviteExpiredAt: account.inviteExpiredAt,
+      status: account.status,
+    },
+    user: account,
   };
 }
 

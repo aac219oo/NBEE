@@ -7,12 +7,17 @@ import { eq } from "drizzle-orm";
 import { getPlatformAccountAdapter } from "@heiso/core/lib/adapters";
 
 /**
- * Account Adapter - 根據 APP_MODE 切換帳號資料來源
+ * Account Adapter - 帳號資料操作
  *
- * - APP_MODE=core: 使用本地 accounts 表
- * - APP_MODE=cms: 使用本地 accounts 表（與 Core 相同）
+ * 讀取操作：
+ *   - Core 模式：使用本地 accounts 表
+ *   - CMS 模式：帳號基本資料從 foreignAccounts (FDW) 讀取
  *
- * 註：CMS 模式若需要連接 Platform DB，使用 Platform Adapter
+ * 寫入操作：
+ *   - Core 模式：寫入本地 accounts 表
+ *   - CMS 模式：若有 Platform Adapter，同時寫入 Platform DB 與本地 accounts 表
+ *
+ * 成員關係資料（role, status, inviteToken）：兩種模式皆使用本地 accounts 表
  */
 
 const isCmsWithPlatform = () =>

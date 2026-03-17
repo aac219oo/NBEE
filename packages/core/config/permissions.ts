@@ -8,7 +8,88 @@ export type PermissionConfigShape = {
   readonly menu: { readonly id: string; readonly title: string; readonly path?: string | null } | null;
 };
 
-export const permissionsConfig = [] as const satisfies readonly PermissionConfigShape[];
+export const permissionsConfig = [
+  {
+    "id": "pe_iBZJ4fNd7M",
+    "resource": "test-app",
+    "action": "access",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_Ah4ojqkfPI",
+    "resource": "test-app",
+    "action": "admin",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_rFQUt47moA",
+    "resource": "test-app",
+    "action": "access",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_eFo4cwxyHl",
+    "resource": "test-app",
+    "action": "admin",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_rStihWS1lK",
+    "resource": "test-app",
+    "action": "access",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_mPqG0C4DKH",
+    "resource": "test-app",
+    "action": "admin",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_xjGxMqlS7l",
+    "resource": "test-app",
+    "action": "access",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  },
+  {
+    "id": "pe_6NA9cWtiQ9",
+    "resource": "test-app",
+    "action": "admin",
+    "menu": {
+      "id": "xMMj8GGd4a",
+      "title": "Test App",
+      "path": "/test"
+    }
+  }
+] as const satisfies readonly PermissionConfigShape[];
 
 export type PermissionResource = (typeof permissionsConfig)[number]['resource'];
 export type PermissionAction = (typeof permissionsConfig)[number]['action'];

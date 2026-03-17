@@ -14,7 +14,7 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import type zod from "zod";
-import { members } from "./member";
+import { accounts } from "../auth/accounts";
 import { roleMenus } from "./role-menus";
 import { rolePermissions } from "./role-permission";
 
@@ -41,7 +41,7 @@ export const roles = pgTable(
 export const roleRelations = relations(roles, ({ many }) => ({
   menus: many(roleMenus),
   permissions: many(rolePermissions),
-  members: many(members),
+  accounts: many(accounts),
 }));
 
 export const rolesSchema = createSelectSchema(roles);

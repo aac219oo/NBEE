@@ -1,4 +1,3 @@
-export * from "./member";
 export * from "./menu";
 export * from "./permission";
 export * from "./role";

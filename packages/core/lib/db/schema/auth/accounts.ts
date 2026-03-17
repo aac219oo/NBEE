@@ -19,8 +19,10 @@ import { type Role, type MemberStatus } from "@heiso/core/types/member";
 /**
  * accounts 表 - 整合帳號與成員資料
  *
- * Core 模式：作為主要的使用者資料來源
- * APPS 模式：不使用此表，改用 foreignAccounts (FDW)
+ * Core 模式：作為主要的使用者與成員資料來源（帳號 + 成員關係）
+ * APPS 模式：
+ *   - 帳號基本資料（email, name, avatar）：從 foreignAccounts (FDW) 讀取
+ *   - 成員關係資料（role, status, inviteToken）：使用此表
  *
  * 此表合併了原本的 users 和 members 功能
  */
