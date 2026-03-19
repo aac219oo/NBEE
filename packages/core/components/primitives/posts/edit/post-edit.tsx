@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { Button } from "@heiso/core/components/ui/button";
 import {
   Form,
@@ -105,9 +106,9 @@ const editorClassName =
   "bg-transparent dark:bg-input/30 h-full w-full max-w-none p-15";
 const containerClassName =
   "w-full max-w-none h-full min-h-0 grid grid-rows-[max-content_1fr] !overflow-y-visible overflow-x-hidden";
-const createSavePostSchema = (t: ReturnType<typeof useTranslations>) =>
+const createSavePostSchema = (t: ReturnType<typeof useTranslations>, titleRequired = true, categoryRequired = true) =>
   z.object({
-    title: z.string().min(1, t("required")),
+    title: titleRequired ? z.string().min(1, t("required")) : z.string().optional(),
     slug: z.string().optional(),
     content: z.custom<Value>(),
     html: z.string().optional(),
@@ -117,14 +118,23 @@ const createSavePostSchema = (t: ReturnType<typeof useTranslations>) =>
     featuredImage: z.string().optional(),
     featuredVideo: z.string().optional(),
     seoImage: z.string().optional(),
-    categoryId: z
-      .array(
-        z.object({
-          value: z.string(),
-          label: z.string(),
-        }),
-      )
-      .min(1, t("required")),
+    categoryId: categoryRequired
+      ? z
+          .array(
+            z.object({
+              value: z.string(),
+              label: z.string(),
+            }),
+          )
+          .min(1, t("required"))
+      : z
+          .array(
+            z.object({
+              value: z.string(),
+              label: z.string(),
+            }),
+          )
+          .optional(),
     published: z.boolean().optional(),
     menus: z.array(
       z.object({
@@ -209,6 +219,9 @@ export function PostEdit({
   translationItem,
   savePost,
   baseLink,
+  extraTabs,
+  afterFirstSaveRedirect,
+  extraDirty,
 }: {
   id?: string;
   data?: PostEditData | null;
@@ -217,11 +230,22 @@ export function PostEdit({
   translationItem?: string;
   savePost: SavePostFunction;
   baseLink: string;
+  extraTabs?: Array<{
+    value: string;
+    trigger: React.ReactNode;
+    content: React.ReactNode;
+  }>;
+  afterFirstSaveRedirect?: (id: string) => string;
+  extraDirty?: boolean;
 }) {
   const title = useTranslations("components.posts");
   const t = useTranslations("components.posts.edit");
   const itemLabel = translationItem || title("item");
-  const schema = createSavePostSchema(t);
+  const schema = createSavePostSchema(
+    t,
+    config?.info?.title !== false,
+    config?.info?.categoriesMode !== false,
+  );
   const { categoryId } = useParams();
   const editorRef = useRef<BlockEditorRef>(null);
   const mobileEditorRef = useRef<BlockEditorRef>(null);
@@ -390,7 +414,7 @@ export function PostEdit({
   const { isDirty, dirtyFields } = form.formState;
 
   // 判斷是否真的有欄位被修改：isDirty 為 true 且 dirtyFields 不為空
-  const isTrulyDirty = isDirty && Object.keys(dirtyFields).length > 0;
+  const isTrulyDirty = (isDirty && Object.keys(dirtyFields).length > 0) || (extraDirty ?? false);
 
   // AI Complete
   // const { execute: completeBlogPostExecute, status: isCompleting } = useAction(
@@ -492,7 +516,7 @@ export function PostEdit({
     form.clearErrors(["title", "categoryId"]);
 
     let ok = true;
-    if (!title) {
+    if (!title && ui.info.title !== false) {
       ok = false;
       form.setError("title", { message: t("required") });
       setActiveTab("info");
@@ -594,9 +618,11 @@ export function PostEdit({
       // 首次儲存：跳到該篇文章的編輯頁（跳轉本身可用 transition 包住）
       setRedirectingAfterFirstSave(true);
       startSavePostTransition(() => {
-        const target = firstCategoryId
-          ? `/dashboard/pages/${firstCategoryId}/post/${post.id}/edit`
-          : `/dashboard/pages/post/${post.id}/edit`;
+        const target = afterFirstSaveRedirect
+          ? afterFirstSaveRedirect(post.id)
+          : firstCategoryId
+            ? `/dashboard/pages/${firstCategoryId}/post/${post.id}/edit`
+            : `/dashboard/pages/post/${post.id}/edit`;
         router.replace(target);
         router.refresh();
       });
@@ -677,7 +703,7 @@ export function PostEdit({
               type="button"
               onClick={() => {
                 if (!isTrulyDirty) {
-                  router.back();
+                  router.push(baseLink);
                   return;
                 }
                 setIsLeaveDialogOpen(true);
@@ -692,11 +718,12 @@ export function PostEdit({
               onOpenChange={setIsLeaveDialogOpen}
               onConfirm={() => {
                 setIsLeaveDialogOpen(false);
-                router.back();
+                router.push(baseLink);
               }}
-              onSave={() => {
+              onSave={async () => {
                 setIsLeaveDialogOpen(false);
-                submitFromButton(false);
+                await submitFromButton(false);
+                router.push(baseLink);
               }}
             />
             <h1 className="text-xl font-bold ml-2 mr-3 capitalize">
@@ -845,6 +872,9 @@ export function PostEdit({
                     JSON-LD
                   </TabsTrigger>
                 )}
+                {extraTabs?.map((tab) => (
+                  <React.Fragment key={tab.value}>{tab.trigger}</React.Fragment>
+                ))}
               </TabsList>
             </div>
 
@@ -1525,6 +1555,11 @@ export function PostEdit({
                   />
                 </TabsContent>
               )}
+              {extraTabs?.map((tab) => (
+                <TabsContent key={tab.value} value={tab.value} variant="tabs">
+                  {tab.content}
+                </TabsContent>
+              ))}
             </form>
           </Tabs>
         )}
