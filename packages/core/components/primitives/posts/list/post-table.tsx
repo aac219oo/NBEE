@@ -135,7 +135,7 @@ export function PostTable({
               </Link>
               {post.isPublished && post.status !== PostStatus.Hidden && (
                 <Link
-                  href={`${site?.basic.base_url?.endsWith('/') ? site.basic.base_url.slice(0, -1) : site?.basic.base_url || ''}${post.type ? `/${post.type}` : ''}${post.slug?.startsWith('/') ? post.slug : `/${post.slug || `pages/${post.id}`}`}`}
+                  href={`${site?.basic?.base_url?.endsWith('/') ? site.basic.base_url.slice(0, -1) : site?.basic?.base_url || ''}${post.type ? `/${post.type}` : ''}${post.slug?.startsWith('/') ? post.slug : `/${post.slug || `pages/${post.id}`}`}`}
                   className="text-gray-500 ml-1"
                   target="_blank"
                 >
