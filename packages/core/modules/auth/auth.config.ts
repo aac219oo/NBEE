@@ -118,18 +118,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
-      try {
-        const accountId = token.sub;
-        if (accountId) {
-          const { findMembershipByAccountId } = await import(
-            "@heiso/core/modules/account/authentication/_server/auth.service"
-          );
-          const membership = await findMembershipByAccountId(accountId);
-          (token as any).memberStatus = membership?.status ?? null;
-        }
-      } catch (e) {
-        console.warn("[jwt] attach memberStatus failed:", e);
-      }
+      // TODO: 統一登入功能尚未實作，暫時跳過 membership 查詢
+      // try {
+      //   const accountId = token.sub;
+      //   if (accountId) {
+      //     const { findMembershipByAccountId } = await import(
+      //       "@heiso/core/modules/account/authentication/_server/auth.service"
+      //     );
+      //     const membership = await findMembershipByAccountId(accountId);
+      //     (token as any).memberStatus = membership?.status ?? null;
+      //   }
+      // } catch (e) {
+      //   console.warn("[jwt] attach memberStatus failed:", e);
+      // }
       return token;
     },
     async session({ session, token }) {
