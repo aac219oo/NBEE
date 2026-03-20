@@ -6,8 +6,15 @@ import { InviteUserEmail } from "@heiso/core/emails/invite-user";
 import { getSiteSettings } from "@heiso/core/server/services/system/setting";
 import { Resend } from "resend";
 
-const { RESEND_API_KEY } = await settings();
-const resend = new Resend(RESEND_API_KEY as string);
+let _resend: Resend | null = null;
+
+async function getResendClient(): Promise<Resend> {
+  if (!_resend) {
+    const { RESEND_API_KEY } = await settings();
+    _resend = new Resend(RESEND_API_KEY as string);
+  }
+  return _resend;
+}
 
 export async function sendEmail({
   from,
@@ -20,6 +27,7 @@ export async function sendEmail({
   subject: string;
   body: string | React.ReactNode;
 }) {
+  const resend = await getResendClient();
   return await resend.emails.send({
     from,
     to,
