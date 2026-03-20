@@ -25,7 +25,7 @@
   },
   "scripts": {
     "dev": "bun run:permission && bun x next dev --turbo",
-    "build": "bun x drizzle-kit migrate && bun x next build",
+    "build": "bun x next build",
     "start": "bun x next start",
     "db:generate": "bun x drizzle-kit generate",
     "db:push": "bun x drizzle-kit push",

@@ -17,7 +17,11 @@ if (!globalForDb.isoClients) globalForDb.isoClients = new Map();
 
 // Shared Client
 export const client =
-  globalForDb.sharedClient ?? postgres(process.env.DATABASE_URL);
+  globalForDb.sharedClient ?? postgres(process.env.DATABASE_URL, {
+    max: 3,
+    idle_timeout: 20,
+    prepare: false,
+  });
 
 if (process.env.NODE_ENV !== "production") globalForDb.sharedClient = client;
 
