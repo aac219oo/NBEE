@@ -1,5 +1,7 @@
 import { getSiteSettings } from "@heiso/core/server/site.service";
 import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
 // import { Geist, Geist_Mono } from "next/font/google";
 import { Nunito, PT_Sans } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
