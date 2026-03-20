@@ -15,6 +15,11 @@ import { type TenantTier } from "../../types/tenant";
 export async function getDynamicDb<
   TS extends Record<string, unknown> = typeof import("./schema"),
 >(customSchema?: TS) {
+  // Skip DB connection during build phase
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    throw new Error("[getDynamicDb] Skipped during build phase");
+  }
+
   try {
     const h = await headers();
     const tier = h.get("x-tenant-tier") as TenantTier | null;
@@ -25,7 +30,7 @@ export async function getDynamicDb<
     // Falls back to default DB if headers() is not available (e.g. script context)
     // or if headers() throws.
   }
-  
+
   if (customSchema) {
     return getDbClient(undefined, undefined, customSchema);
   }
