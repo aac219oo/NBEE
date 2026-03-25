@@ -25,13 +25,11 @@ import * as React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDebounceCallback } from "usehooks-ts";
-import { getPost } from "@heiso/core/server/post.service";
-import {
-  deleteTemplate,
-  getTemplateById,
-  getTemplatesList,
-  type TemplateItem,
-} from "@heiso/core/server/templates.service";
+import type {
+  BlockEditorServiceActions,
+  TemplateDialogServiceActions,
+  TemplateItem,
+} from "@heiso/core/types/services";
 import { MapElementStatic } from "@heiso/core/components/editor/custom-plugins/google-map/google-map-plugin";
 import { BaseEditorKit } from "@heiso/core/components/editor/editor-base-kit";
 import { EditorKit } from "@heiso/core/components/editor/editor-kit";
@@ -75,6 +73,8 @@ interface BlockEditorProps {
   mobileEditor?: Value | undefined;
   onTemplateSelect?: (templateId: string) => void;
   currentSavedTemplateId?: string;
+  editorServiceActions?: BlockEditorServiceActions;
+  templateDialogServiceActions?: TemplateDialogServiceActions;
 }
 
 export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
@@ -91,6 +91,8 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
       mobileEditor,
       onTemplateSelect,
       currentSavedTemplateId,
+      editorServiceActions,
+      templateDialogServiceActions,
     },
     ref,
   ) {
@@ -118,7 +120,7 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
           return;
         }
 
-        const existingPost = await getPost(fetchPostId);
+        const existingPost = await editorServiceActions!.getPost(fetchPostId);
         if (!existingPost) {
           toast.error(t("error.postNotFound"));
           return;
@@ -127,7 +129,7 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
         // 如果文章有關聯的模板，預先讀取模板資料
         if (existingPost?.savedTemplateId) {
           try {
-            const templateData = await getTemplateById(
+            const templateData = await editorServiceActions!.getTemplateById(
               existingPost?.savedTemplateId,
             );
             if (templateData) {
@@ -167,6 +169,7 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
                         {toolVisibility?.showTemplateListButton && (
                           <TemplateList
                             openMobileEditor={webEditor !== undefined}
+                            serviceActions={editorServiceActions}
                           />
                         )}
                         {toolVisibility?.showSaveTemplateButton && (
@@ -187,7 +190,7 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
       );
 
       return list;
-    }, [toolVisibility, t, clickSaveTemplateHandler, webEditor]);
+    }, [toolVisibility, t, clickSaveTemplateHandler, webEditor, editorServiceActions]);
 
     const editor = usePlateEditor({
       plugins,
@@ -1064,6 +1067,7 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
             <LoaderCircle className="size-8" />
           </motion.div>
         )}
+        {templateDialogServiceActions && (
         <SaveTemplateDialog
           open={isTemplateDialogOpen}
           onOpenChange={setIsTemplateDialogOpen}
@@ -1072,13 +1076,14 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
           mobileEditor={mobileEditor}
           existingTemplate={existingTemplate}
           postId={fetchPostId}
+          serviceActions={templateDialogServiceActions}
           onTemplateSaved={(templateId) => {
             // 通知父組件更新 savedTemplateId
             onTemplateSelect?.(templateId);
 
             // 更新當前模板資訊
-            if (templateId) {
-              getTemplateById(templateId)
+            if (templateId && editorServiceActions) {
+              editorServiceActions.getTemplateById(templateId)
                 .then((templateData) => {
                   if (templateData) {
                     setExistingTemplate({
@@ -1093,6 +1098,7 @@ export const BlockEditor = React.forwardRef<BlockEditorRef, BlockEditorProps>(
             }
           }}
         />
+        )}
       </>
     );
   },
@@ -1102,9 +1108,10 @@ BlockEditor.displayName = "BlockEditor";
 
 interface TemplateListProps {
   openMobileEditor?: boolean;
+  serviceActions?: BlockEditorServiceActions;
 }
 
-const TemplateList: React.FC<TemplateListProps> = ({ openMobileEditor }) => {
+const TemplateList: React.FC<TemplateListProps> = ({ openMobileEditor, serviceActions }) => {
   const t = useTranslations("components.posts.edit.template");
   const editor = useEditorRef();
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -1112,9 +1119,10 @@ const TemplateList: React.FC<TemplateListProps> = ({ openMobileEditor }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchTemplates = useCallback(async () => {
+    if (!serviceActions) return;
     try {
       setIsLoading(true);
-      const templatesList = await getTemplatesList();
+      const templatesList = await serviceActions.getTemplatesList();
       setTemplates(templatesList);
     } catch (error) {
       console.error("獲取模板清單失敗:", error);
@@ -1122,17 +1130,18 @@ const TemplateList: React.FC<TemplateListProps> = ({ openMobileEditor }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, [t, serviceActions]);
 
   const handleDeleteTemplate = async (
     templateId: string,
     templateName: string,
   ) => {
+    if (!serviceActions) return;
     try {
-      await deleteTemplate(templateId);
+      await serviceActions.deleteTemplate(templateId);
       toast.success(t("error.deleteTemplateSuccess", { templateName }));
       // 重新獲取模板清單
-      const templatesList = await getTemplatesList();
+      const templatesList = await serviceActions.getTemplatesList();
       setTemplates(templatesList);
     } catch (error) {
       console.error("刪除模板失敗:", error);
@@ -1145,8 +1154,9 @@ const TemplateList: React.FC<TemplateListProps> = ({ openMobileEditor }) => {
   );
 
   const applyTemplate = async (tpl: TemplateItem) => {
+    if (!serviceActions) return;
     try {
-      const templateData = await getTemplateById(tpl.id);
+      const templateData = await serviceActions.getTemplateById(tpl.id);
       // 修正邏輯：web 模式載入 htmlContent，mobile 模式載入 mobileContent
       const rewriteEditor = openMobileEditor
         ? tpl.mobileContent

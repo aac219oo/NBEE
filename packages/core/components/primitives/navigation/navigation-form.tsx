@@ -32,11 +32,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
-import {
-  getCategoryList,
-  getPost,
-  getPostList
-} from "@heiso/core/server/navigation.service";
+import type { NavigationServiceActions } from "@heiso/core/types/services";
 import { NavigationFormConfig } from "@heiso/core/config/forms/navigation"
 import { ActionButton } from "@heiso/core/components/primitives/action-button";
 import { CollapsibleSection } from "@heiso/core/components/ui/collapsible-section";
@@ -115,6 +111,7 @@ interface NavigationFormProps {
   onSave: (item: Partial<Omit<NavigationItem, "id">>) => void;
   onCancel: () => void;
   navigationItems: NavigationItem[];
+  serviceActions: NavigationServiceActions;
 }
 
 export function NavigationForm({
@@ -123,6 +120,7 @@ export function NavigationForm({
   onSave,
   onCancel,
   navigationItems,
+  serviceActions,
 }: NavigationFormProps) {
   const t = useTranslations("dashboard.navigation.navigation-manager");
   const { uploadFile, isUploading } = useUploadFile();
@@ -190,7 +188,7 @@ export function NavigationForm({
   useEffect(() => {
     let cancelled = false;
     setIsLoadingCategories(true);
-    getCategoryList()
+    serviceActions.getCategoryList()
       .then((list) => {
         if (cancelled) return;
         setPageCategories(list);
@@ -227,7 +225,7 @@ export function NavigationForm({
         selected?.id ?? (linkCategory ? String(linkCategory) : undefined);
       if (categoryId) {
         setIsLoadingPages(true);
-        getPostList({ categoryId, start: 0, limit: 100 })
+        serviceActions.getPostList({ categoryId, start: 0, limit: 100 })
           .then((result) => {
             if (result?.data) {
               setPages(
@@ -258,7 +256,7 @@ export function NavigationForm({
     const hydrateCategoryById = async () => {
       setIsLoadingPages(true);
       try {
-        const post = await getPost(String(itemId));
+        const post = await serviceActions.getPost(String(itemId));
         if (cancelled) return;
         const categories = (post?.categories || [])
           .map((c) => c.category)
@@ -270,7 +268,7 @@ export function NavigationForm({
         // 命中一個或多個分類時，先回填第一個，避免頁面空白
         const first = categories[0];
         form.setValue("linkCategory", String(first.id), { shouldDirty: false });
-        const result = await getPostList({
+        const result = await serviceActions.getPostList({
           categoryId: String(first.id),
           start: 0,
           limit: 100,

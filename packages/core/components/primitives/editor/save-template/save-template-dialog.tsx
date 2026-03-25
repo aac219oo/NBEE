@@ -25,15 +25,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
-import {
-  getPost,
-  savePost,
-} from "@heiso/core/server/post.service";
-import {
-  savePostTemplate,
-  saveTemplate,
-  updateTemplate,
-} from "@heiso/core/server/templates.service";
+import type { TemplateDialogServiceActions } from "@heiso/core/types/services";
 import { BaseEditorKit } from "@heiso/core/components/editor/editor-base-kit";
 import { ActionButton } from "@heiso/core/components/primitives/action-button";
 import { EditorStatic } from "@heiso/core/components/ui/editor-static";
@@ -55,6 +47,7 @@ interface SaveTemplateDialogProps {
   onTemplateSaved?: (templateId: string) => void;
   existingTemplate?: { id: string; name: string } | null;
   postId: string | null;
+  serviceActions: TemplateDialogServiceActions;
 }
 
 export function SaveTemplateDialog({
@@ -66,6 +59,7 @@ export function SaveTemplateDialog({
   onTemplateSaved,
   existingTemplate,
   postId,
+  serviceActions,
 }: SaveTemplateDialogProps) {
   const tError = useTranslations("components.posts.edit.template.error");
   const tn = useTranslations("components.posts.edit.template");
@@ -108,7 +102,7 @@ export function SaveTemplateDialog({
 
     try {
       // 先獲取現有文章資料
-      const existingPost = await getPost(postId);
+      const existingPost = await serviceActions.getPost(postId);
       if (existingPost) {
         // mobile 為空時，使用 web 的內容
         const postData = {
@@ -122,7 +116,7 @@ export function SaveTemplateDialog({
           published: existingPost.status === "published",
         };
 
-        await savePost(postData, postId);
+        await serviceActions.savePost(postData, postId);
         toast.success(tError("templateUpdatedSuccess"));
       }
     } catch (postError) {
@@ -183,7 +177,7 @@ export function SaveTemplateDialog({
         : "";
 
       // 更新現有模板
-      const result = await updateTemplate(existingTemplateId, {
+      const result = await serviceActions.updateTemplate(existingTemplateId, {
         name: values.name,
         htmlContent: webContent,
         mobileContent: mobileContent,
@@ -268,7 +262,7 @@ export function SaveTemplateDialog({
       }
 
       // 儲存模板
-      const result = await saveTemplate({
+      const result = await serviceActions.saveTemplate({
         name: values.name,
         // description: values.description,
         pageId: postId || undefined,
@@ -281,7 +275,7 @@ export function SaveTemplateDialog({
       // 儲存模板成功後，自動更新 post.saved_template_id
       if (result.success && result.template?.id) {
         try {
-          await savePostTemplate(postId, result.template.id);
+          await serviceActions.savePostTemplate(postId, result.template.id);
 
           // 通知父組件更新資料
           onTemplateSaved?.(result.template.id);

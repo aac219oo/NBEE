@@ -55,6 +55,7 @@ import { z } from "zod";
 import { BaseEditorKit } from "@heiso/core/components/editor/editor-base-kit";
 import { ActionButton } from "@heiso/core/components/primitives/action-button";
 import { BlockEditor, type BlockEditorRef } from "@heiso/core/components/primitives/editor";
+import type { BlockEditorServiceActions, TemplateDialogServiceActions } from "@heiso/core/types/services";
 import { serializeHtmlCompat } from "@heiso/core/components/primitives/editor/serialize-html-compat";
 import { LoadingOverlay } from "@heiso/core/components/primitives/posts/edit/loading-overlay";
 import {
@@ -222,6 +223,8 @@ export function PostEdit({
   extraTabs,
   afterFirstSaveRedirect,
   extraDirty,
+  editorServiceActions,
+  templateDialogServiceActions,
 }: {
   id?: string;
   data?: PostEditData | null;
@@ -237,6 +240,8 @@ export function PostEdit({
   }>;
   afterFirstSaveRedirect?: (id: string) => string;
   extraDirty?: boolean;
+  editorServiceActions?: BlockEditorServiceActions;
+  templateDialogServiceActions?: TemplateDialogServiceActions;
 }) {
   const title = useTranslations("components.posts");
   const t = useTranslations("components.posts.edit");
@@ -970,6 +975,8 @@ export function PostEdit({
                                     mobileEditor={form.getValues(
                                       "contentMobile",
                                     )}
+                                    editorServiceActions={editorServiceActions}
+                                    templateDialogServiceActions={templateDialogServiceActions}
                                     onChange={({ value, html }) => {
                                       const currentValue =
                                         form.getValues("content");
@@ -1025,6 +1032,8 @@ export function PostEdit({
                                         ui.editor.showTemplateButtons,
                                     }}
                                     webEditor={form.getValues("content")}
+                                    editorServiceActions={editorServiceActions}
+                                    templateDialogServiceActions={templateDialogServiceActions}
                                     onChange={({ value, html }) => {
                                       const currentValue =
                                         form.getValues("contentMobile");
@@ -1081,6 +1090,8 @@ export function PostEdit({
                                       ui.editor.showTemplateButtons,
                                   }}
                                   mobileEditor={form.getValues("content")} //因為沒有 mobile ，所以手機版內容要跟 web 一樣
+                                  editorServiceActions={editorServiceActions}
+                                  templateDialogServiceActions={templateDialogServiceActions}
                                   onChange={({ value, html }) => {
                                     const currentValue =
                                       form.getValues("content");
