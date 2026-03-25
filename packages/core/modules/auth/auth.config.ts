@@ -160,13 +160,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       try {
         const accountId = session.user?.id;
-        console.log("[session] accountId:", accountId);
+        // console.log("[session] accountId:", accountId);
         if (accountId) {
-          const { findMembershipByAccountId } = await import(
-            "@heiso/core/modules/account/authentication/_server/auth.service"
+          const { cachedFindMembershipByAccountId } = await import(
+            "@heiso/core/lib/cache/membership"
           );
-          const membership = await findMembershipByAccountId(accountId);
-          console.log("[session] membership:", membership);
+          const membership = await cachedFindMembershipByAccountId(accountId);
+          // console.log("[session] membership:", membership);
 
           session.member = {
             status: membership?.status ?? null,

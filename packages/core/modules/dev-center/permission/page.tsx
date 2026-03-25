@@ -1,6 +1,7 @@
 import { CaptionTotal } from "@heiso/core/components/shared/caption-total";
 import { permissionsConfig, type PermissionConfigShape } from "@heiso/core/config/permissions";
 import { Suspense } from "react";
+import { Skeleton } from "@heiso/core/components/ui/skeleton";
 import { getMenus } from "@heiso/core/modules/dev-center/permission/_server/menu.service";
 import {
   getPermissions,
@@ -38,7 +39,7 @@ export default async function PermissionPage() {
         <CaptionTotal title="Permissions" total={totalPermissions} />
       </div>
 
-      <Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={<div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}>
         <PermissionListContent groups={permissionGroups} />
       </Suspense>
     </div>

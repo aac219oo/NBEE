@@ -1,4 +1,4 @@
-import { cacheTag } from 'next/cache'
+import { unstable_cache } from 'next/cache'
 import { findMembershipByAccountId } from '@heiso/core/modules/account/authentication/_server/auth.service'
 
 /**
@@ -6,8 +6,10 @@ import { findMembershipByAccountId } from '@heiso/core/modules/account/authentic
  * Tag: `membership:{accountId}`
  */
 export async function cachedFindMembershipByAccountId(accountId: string) {
-    'use cache'
-    cacheTag(`membership:${accountId}`)
-
-    return findMembershipByAccountId(accountId)
+    const cached = unstable_cache(
+        () => findMembershipByAccountId(accountId),
+        [`membership:${accountId}`],
+        { tags: [`membership:${accountId}`] },
+    )
+    return cached()
 }

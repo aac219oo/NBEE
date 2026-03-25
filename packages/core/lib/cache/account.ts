@@ -1,4 +1,4 @@
-import { cacheTag } from 'next/cache'
+import { unstable_cache } from 'next/cache'
 import { getAccountByEmail } from '@heiso/core/lib/platform/account-adapter'
 import type { TAccount } from '@heiso/core/lib/db/schema/auth/accounts'
 
@@ -9,8 +9,10 @@ import type { TAccount } from '@heiso/core/lib/db/schema/auth/accounts'
 export async function cachedGetAccountByEmail(
     email: string,
 ): Promise<TAccount | null> {
-    'use cache'
-    cacheTag(`account:${email}`)
-
-    return getAccountByEmail(email)
+    const cached = unstable_cache(
+        () => getAccountByEmail(email),
+        [`account:${email}`],
+        { tags: [`account:${email}`] },
+    )
+    return cached()
 }

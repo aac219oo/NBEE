@@ -1,6 +1,6 @@
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { redirect } from "next/navigation";
-import { getAccountByEmail } from "@heiso/core/lib/platform/account-adapter";
+import { cachedGetAccountByEmail } from "@heiso/core/lib/cache/account";
 import AuthenticationForm from "./authentication-form";
 
 export default async function AuthenticationPage() {
@@ -10,7 +10,7 @@ export default async function AuthenticationPage() {
         redirect("/login");
     }
 
-    const user = await getAccountByEmail(session.user.email);
+    const user = await cachedGetAccountByEmail(session.user.email);
 
     const loginMethod = user?.loginMethod || "email";
 

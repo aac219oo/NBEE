@@ -1,5 +1,6 @@
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { Suspense } from "react";
+import { LayoutSkeleton } from "@heiso/core/components/skeleton";
 import { Layout } from "@heiso/core/components/primitives/layout";
 import type { UserAvatarMenuItem } from "@heiso/core/components/primitives/user-avatar";
 import type { Navigation } from "@heiso/core/types/client";
@@ -140,11 +141,7 @@ export default async function DashboardLayout({
 
   return (
     <Suspense
-      fallback={
-        <div className="h-screen flex items-center justify-center">
-          Loading ...
-        </div>
-      }
+      fallback={<LayoutSkeleton />}
     >
       <PermissionProvider>
         <Layout
