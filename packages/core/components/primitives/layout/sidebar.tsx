@@ -53,7 +53,7 @@ export function DashboardSidebar({ navigation }: { navigation?: Navigation }) {
       <SidebarBody className="bg-transparent justify-between gap-10 border-r dark:bg-transparent">
         <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
           <div className="flex flex-col gap-2">
-            {navigation.items.map((item) => {
+            {navigation.items.map((item, index) => {
               const groupKey = Array.isArray(item)
                 ? `group:${item
                     .map((si) => si.path ?? si.title ?? "")
@@ -63,7 +63,7 @@ export function DashboardSidebar({ navigation }: { navigation?: Navigation }) {
               return Array.isArray(item) ? (
                 <div
                   key={groupKey}
-                  className="flex flex-col border-t pt-2 gap-1"
+                  className={`flex flex-col pt-2 gap-1${index > 0 ? " border-t" : ""}`}
                 >
                   {item.map((subItem) => (
                     <SidebarLink
