@@ -3,7 +3,7 @@ import ApprovedEmail from "@heiso/core/emails/approved";
 import { ForgotPasswordEmail } from "@heiso/core/emails/forgot-password";
 import InviteOwnerEmail from "@heiso/core/emails/invite-owner";
 import { InviteUserEmail } from "@heiso/core/emails/invite-user";
-import { getSiteSettings } from "@heiso/core/server/services/system/setting";
+import { getSiteSettings } from "@heiso/core/server/site.service";
 import { Resend } from "resend";
 
 let _resend: Resend | null = null;

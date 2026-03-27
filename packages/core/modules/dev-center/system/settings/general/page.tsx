@@ -6,12 +6,10 @@ import { Card } from "@heiso/core/components/ui/card";
 import {
   Form,
   FormControl,
-  FormMessage,
   FormField,
   FormItem,
   FormLabel,
 } from "@heiso/core/components/ui/form";
-import { Input } from "@heiso/core/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -47,10 +45,6 @@ export const SystemOauth = {
     name: "Azure SSO",
     value: "microsoft",
   },
-  // github: {
-  //   name: "Github SSO",
-  //   value: "github",
-  // },
 };
 
 export type SiteSetting = {
@@ -74,18 +68,22 @@ export type SiteSetting = {
   system_oauth?: string;
 };
 
-type SettingsFormValues = SiteSetting;
+const settingsSchema = z.object({
+  system_oauth: z.string().optional(),
+});
+
+type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 export default function Setting() {
   const t = useTranslations("devCenter.settings");
   const [isLoading, startTransition] = useTransition();
-  const [generalSettings, setGeneralSettings] = useState<any>(null);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
   const [currentLocale, setCurrentLocale] = useState<Locale | undefined>();
 
   const fetchSettings = useCallback(async () => {
     try {
       const data = await getGeneralSettings();
-      setGeneralSettings(data);
+      setSystemSettings(data);
     } catch (error) {
       console.error("Failed to fetch general settings", error);
     }
@@ -95,85 +93,26 @@ export default function Setting() {
     fetchSettings();
   }, [fetchSettings]);
 
-  // 將 DB 讀取到的 site 物件映射到表單預設值，容忍 snake/camel 命名差異
-  const mapSiteToFormValues = useCallback(
-    (s: any | null | undefined): SettingsFormValues => {
-      const basic = s?.basic ?? {};
-      const branding = s?.branding ?? {};
-      const assets = s?.assets ?? {};
-      const system_oauth = s?.system_oauth ?? "none";
-
-      return {
-        basic: {
-          name: basic?.name ?? "",
-          title: basic?.title ?? "",
-          base_url: basic?.base_url ?? basic?.baseUrl ?? "",
-          domain: basic?.domain ?? "",
-        },
-        branding: {
-          slogan: branding?.slogan ?? "",
-          organization: branding?.organization ?? "",
-          description: branding?.description ?? "",
-          copyright: branding?.copyright ?? "",
-        },
-        assets: {
-          favicon: assets?.favicon ?? "",
-          logo: assets?.logo ?? "",
-          ogImage: assets?.ogImage ?? "",
-        },
-        system_oauth,
-      };
-    },
-    [],
-  );
-
-  // 以 DB 的 general_settings 為主，顯示系統預設語言
   useEffect(() => {
-    const locale = (generalSettings as any)?.language?.default as
+    const locale = (systemSettings as any)?.language?.default as
       | Locale
       | undefined;
     setCurrentLocale(locale ?? defaultLocale);
-  }, [generalSettings]);
-
-  // Create schema with translations
-  const settingsSchema = z.object({
-    basic: z.object({
-      name: z.string().max(32).optional(),
-      title: z.string().optional(),
-      base_url: z.string().optional(),
-      domain: z
-        .string()
-        .regex(
-          /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/,
-          t("basic.domain.invalid_format"),
-        )
-        .or(z.literal(""))
-        .optional(),
-    }),
-    branding: z.object({
-      slogan: z.string().optional(),
-      organization: z.string().optional(),
-      description: z.string().optional(),
-      copyright: z.string().optional(),
-    }),
-    assets: z.object({
-      favicon: z.string().optional(),
-      logo: z.string().optional(),
-      ogImage: z.string().optional(),
-    }),
-    system_oauth: z.string().optional(),
-  });
+  }, [systemSettings]);
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
-    defaultValues: mapSiteToFormValues(generalSettings),
+    defaultValues: {
+      system_oauth: systemSettings?.system_oauth ?? "none",
+    },
   });
 
-  // 當 generalSettings 資料載入後，重置表單以讀取 DB 值
   useEffect(() => {
-    if (!generalSettings) return;
-    form.reset(mapSiteToFormValues(generalSettings));
-  }, [generalSettings, form, mapSiteToFormValues]);
+    if (!systemSettings) return;
+    form.reset({
+      system_oauth: systemSettings?.system_oauth ?? "none",
+    });
+  }, [systemSettings, form]);
 
   async function onSubmit(data: SettingsFormValues) {
     startTransition(async () => {
@@ -185,75 +124,15 @@ export default function Setting() {
 
   return (
     <div className="container mx-auto max-w-5xl justify-start py-10 space-y-6 mb-15 px-10">
-      {/* Header with title and language switcher */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
       </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Basic Information */}
           <Card className="bg-card/50 p-6">
             <div className="flex flex-col gap-6">
-              {/* <div>
-                <h2 className="text-lg font-semibold">{t('basic.title')}</h2>
-                <p className="text-sm text-muted-foreground">
-                  {t('basic.description')}
-                </p>
-              </div> */}
               <div className="grid gap-4">
-                {/* <FormField
-                  control={form.control}
-                  name="basic.name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('basic.form.name.label')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} maxLength={32} />
-                      </FormControl>
-                      <FormDescription>
-                        {t('basic.form.name.description')}
-                      </FormDescription>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="basic.title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('basic.form.title.label')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="basic.base_url"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('basic.form.base_url.label')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                /> */}
-                <FormField
-                  control={form.control}
-                  name="basic.domain"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("basic.domain.label")}</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <FormField
                   control={form.control}
                   name="system_oauth"
@@ -298,7 +177,6 @@ export default function Setting() {
         </form>
       </Form>
 
-      {/* 多国语言设置 */}
       <Card className="p-6">
         <div className="space-y-4">
           <div>

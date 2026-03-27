@@ -1,10 +1,8 @@
 import config from "@heiso/core/config";
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { hasAnyUser } from "@heiso/core/server/services/auth";
-import {
-  getGeneralSettings,
-  getSiteSettings,
-} from "@heiso/core/server/services/system/setting";
+import { getSystemSettings } from "@heiso/core/server/services/system/setting";
+import { getSiteSettings } from "@heiso/core/server/site.service";
 import { redirect } from "next/navigation";
 import { Login } from "../_components";
 import InitializeTenantForm from "../_components/InitializeTenantForm";
@@ -102,7 +100,7 @@ export default async function Page({
   }
 
   const anyUser = await hasAnyUser();
-  const general = await getGeneralSettings();
+  const general = await getSystemSettings();
   const site = await getSiteSettings();
   const orgName =
     (site as any)?.branding?.organization || config?.site?.organization;
@@ -118,6 +116,11 @@ export default async function Page({
     const userId = session.user.id ?? undefined;
     const sessionEmail = session.user.email ?? undefined;
 
+    // Platform staff: skip zombie check, redirect to dashboard
+    if (session.user.platformStaff) {
+      redirect("/dashboard");
+    }
+
     // Fix: Verify if user really exists in DB (Zombie Session Check)
     if (sessionEmail) {
       const dbUser = await getAccountByEmail(sessionEmail);
@@ -125,11 +128,6 @@ export default async function Page({
         // User in session but not in DB. Force logout.
         redirect("/api/auth/signout");
       }
-    }
-
-    // 開發人員直接進 Dashboard
-    if (session.user.platformStaff) {
-      redirect("/dashboard");
     }
 
     const member = userId ? await getMember(userId) : null;

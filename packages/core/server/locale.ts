@@ -1,7 +1,7 @@
 "use server";
 
 import { defaultLocale, type Locale } from "@heiso/core/i18n/config";
-import { getSiteSettings } from "@heiso/core/server/services/system/setting";
+import { getSystemSettings } from "@heiso/core/server/services/system/setting";
 import { cookies } from "next/headers";
 
 const COOKIE_NAME = "_LOCALE";
@@ -12,8 +12,8 @@ export async function getUserLocale() {
   if (fromCookie) return fromCookie;
 
   try {
-    const site = await getSiteSettings();
-    const configured = (site?.language as any)?.default as Locale | undefined;
+    const system = await getSystemSettings();
+    const configured = (system?.language as any)?.default as Locale | undefined;
     return (configured || defaultLocale) as Locale;
   } catch {
     return defaultLocale;

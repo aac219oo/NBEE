@@ -16,13 +16,11 @@ import {
 import type zod from "zod";
 
 /**
- * settings 表 - 合併版
+ * settings 表
  *
  * 用於存放所有系統設定，用 group 區分用途：
- * - 'system': 後端系統設定（含 tenantId 識別）
- * - 'site': 前端網站設定（原 siteSettings）
- * - 'general': 一般設定
- * - 其他自定義分組...
+ * - 'system': 後端系統設定（含 tenantId 識別、API key、OAuth 等）
+ * - 'site': 前端網站設定（basic、branding、assets、SEO 等）
  *
  * 特殊設定：
  * - name='tenantId', group='system': 用於識別此 DB 所屬租戶
@@ -37,7 +35,7 @@ export const settings = pgTable(
     value: json("value").notNull(),
 
     // 分組與元資料
-    group: varchar("group", { length: 50 }),
+    group: varchar("group", { length: 50 }).notNull().default("system"),
     description: varchar("description", { length: 255 }),
     isKey: boolean("is_key").notNull().default(false),
 
@@ -50,7 +48,7 @@ export const settings = pgTable(
     index("settings_group_idx").on(table.group),
     index("settings_is_key_idx").on(table.isKey),
     index("settings_deleted_at_idx").on(table.deletedAt),
-    check("settings_group_check", sql`${table.group} IN ('system', 'general', 'site')`),
+    check("settings_group_check", sql`${table.group} IN ('system', 'site')`),
   ],
 );
 

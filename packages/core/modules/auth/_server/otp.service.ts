@@ -73,8 +73,8 @@ export async function generateOTP(email: string): Promise<OTPGenerationResult> {
       expiresAt,
     });
 
-    const assets = await db.query.siteSettings.findFirst({
-      where: (t, { eq }) => eq(t.name, "assets"),
+    const assets = await db.query.settings.findFirst({
+      where: (t, { eq, and }) => and(eq(t.name, "assets"), eq(t.group, "site")),
     });
 
     const { logo } = (assets?.value || {}) as Record<string, string>;

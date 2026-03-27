@@ -63,7 +63,7 @@ export async function saveDefaultLanguage(locale: Locale) {
     .values({
       name: "language",
       value: { default: locale },
-      group: "site",
+      group: "system",
     })
     .onConflictDoUpdate({
       target: settings.name,

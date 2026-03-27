@@ -1,12 +1,9 @@
-import {
-  getGeneralSettings,
-  getSettings,
-  getSiteSettings,
-} from "@heiso/core/server/services/system/setting";
+import { getSystemSettings } from "@heiso/core/server/services/system/setting";
+import { getSiteSettings } from "@heiso/core/server/site.service";
 import type { Settings } from "@heiso/core/types/system";
 
 export async function settings(withoutKey: boolean = false): Promise<Settings> {
-  const data = await getSettings(withoutKey);
+  const data = await getSystemSettings(withoutKey);
   // Prefer environment variable if set
   if (process.env.NOTIFY_EMAIL) {
     data["NOTIFY_EMAIL"] = process.env.NOTIFY_EMAIL;
@@ -30,9 +27,5 @@ export async function settings(withoutKey: boolean = false): Promise<Settings> {
 }
 
 export function site(): Promise<Settings> {
-  return getSiteSettings();
-}
-
-export function generalSettings(): Promise<Settings> {
-  return getGeneralSettings();
+  return getSiteSettings() as Promise<Settings>;
 }
