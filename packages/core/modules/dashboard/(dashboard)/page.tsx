@@ -25,7 +25,7 @@ export default async function DashboardPage() {
 
   const membership = await getMyMembership();
   const hasFullAccess =
-    membership.isDeveloper === true ||
+    membership.platformStaff === true ||
     membership.role === 'owner' ||
     (membership.role as any)?.fullAccess === true;
 

@@ -2,11 +2,9 @@
 
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import type { TPermission } from "@heiso/core/lib/db/schema";
-import { roleMenus, foreignAccounts } from "@heiso/core/lib/db/schema";
+import { roleMenus } from "@heiso/core/lib/db/schema";
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { eq, and } from "drizzle-orm";
-
-const isCoreMode = () => process.env.APP_MODE === "core";
 
 // Types
 type AccessParams = {
@@ -19,8 +17,6 @@ const UNAUTHORIZED_ERROR = "Unauthorized";
 
 /**
  * 取得當前帳號資訊
- * Core 模式：使用本地 accounts 表
- * APPS 模式：使用 FDW foreignAccounts
  */
 async function getAccount() {
   const session = await auth();
@@ -29,30 +25,16 @@ async function getAccount() {
 
   const db = await getDynamicDb();
 
-  if (isCoreMode()) {
-    const account = await db.query.accounts.findFirst({
-      columns: {
-        id: true,
-        email: true,
-        name: true,
-      },
-      where: (t, { eq, isNull }) =>
-        and(eq(t.id, accountId), isNull(t.deletedAt)),
-    });
-    return account ?? null;
-  } else {
-    const [account] = await db
-      .select({
-        id: foreignAccounts.id,
-        email: foreignAccounts.email,
-        name: foreignAccounts.name,
-      })
-      .from(foreignAccounts)
-      .where(eq(foreignAccounts.id, accountId))
-      .limit(1);
-
-    return account ?? null;
-  }
+  const account = await db.query.accounts.findFirst({
+    columns: {
+      id: true,
+      email: true,
+      name: true,
+    },
+    where: (t, { eq, isNull }) =>
+      and(eq(t.id, accountId), isNull(t.deletedAt)),
+  });
+  return account ?? null;
 }
 
 /**
@@ -65,7 +47,7 @@ async function getMyMembership() {
   if (!accountId) throw new Error(UNAUTHORIZED_ERROR);
 
   const db = await getDynamicDb();
-  const isDeveloper = session?.user?.isDeveloper ?? false;
+  const platformStaff = session?.user?.platformStaff ?? false;
 
   const account = await db.query.accounts.findFirst({
     columns: {
@@ -87,7 +69,7 @@ async function getMyMembership() {
   });
 
   return {
-    isDeveloper,
+    platformStaff,
     id: account?.id,
     accountId: account?.id,
     roleId: account?.roleId,

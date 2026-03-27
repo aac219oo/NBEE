@@ -82,7 +82,7 @@ export function RoleList({
   permissions: any;
 }) {
   const t = useTranslations("dashboard.permission.role");
-  const { isDeveloper } = useAccount();
+  const { platformStaff } = useAccount();
   const pathname = usePathname();
 
   const [open, setOpen] = useState(false);
@@ -110,7 +110,7 @@ export function RoleList({
             >
               <ListChevronsDownUp className="h-4 w-4" />
             </Button>
-            {pathname.indexOf("dev-center") !== -1 && isDeveloper && (
+            {pathname.indexOf("dev-center") !== -1 && platformStaff && (
               <Button onClick={() => setOpen(true)}>
                 <Plus className="h-4 w-4" />
                 {t("list.add_new")}
@@ -146,7 +146,7 @@ function RoleItemCollapsible({
   isCollapsedClose: boolean;
 }) {
   const t = useTranslations("dashboard.permission.role");
-  const { isDeveloper } = useAccount();
+  const { platformStaff } = useAccount();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -392,7 +392,7 @@ function RoleItemCollapsible({
               </ActionButton>
             </>
           )}
-          {pathname.indexOf("dev-center") !== -1 && isDeveloper && (
+          {pathname.indexOf("dev-center") !== -1 && platformStaff && (
             <DeleteConfirm id={role.id}>
               <Button
                 variant="ghost"

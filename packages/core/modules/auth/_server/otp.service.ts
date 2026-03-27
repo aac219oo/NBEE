@@ -6,7 +6,7 @@ import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
 import { user2faCode } from "@heiso/core/lib/db/schema";
 import { sendEmail } from "@heiso/core/lib/email";
 import { and, eq, gt, lt } from "drizzle-orm";
-import { getAccountByEmail, isUserDeveloper, getMember } from "./user.service";
+import { getAccountByEmail, getMember } from "./user.service";
 
 export interface OTPGenerationResult {
   success: boolean;
@@ -41,27 +41,21 @@ export async function generateOTP(email: string): Promise<OTPGenerationResult> {
     }
 
     const db = await getDynamicDb();
-    const isDeveloper = await isUserDeveloper(account.id);
 
-    // 如果用户不是开发者，检查用户是否已加入组织
-    if (!isDeveloper) {
-      // 查找用户
-      const member = await getMember(account.id);
+    // 檢查使用者是否為 active 成員
+    const member = await getMember(account.id);
+    if (!member) {
+      return {
+        success: false,
+        message: "userNotFound",
+      };
+    }
 
-      if (!member) {
-        return {
-          success: false,
-          message: "userNotFound",
-        };
-      }
-
-      // Active 狀態等於帳號啟用
-      if (member.status !== "active") {
-        return {
-          success: false,
-          message: "notActive",
-        };
-      }
+    if (member.status !== "active") {
+      return {
+        success: false,
+        message: "notActive",
+      };
     }
 
     // 清理该用户的过期验证码

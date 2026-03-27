@@ -81,7 +81,7 @@ export function MemberList({
   menus: TMenu[];
 }) {
   const { data: session } = useSession();
-  const { isDeveloper } = useAccount();
+  const { platformStaff } = useAccount();
   const [filtering, setFiltering] = useState("");
   const te = useTranslations("dashboard.permission.team");
   const t = useTranslations("dashboard.permission.team.members");
@@ -138,7 +138,7 @@ export function MemberList({
     {
       accessorFn: (row) => {
         // row.role here is the TRole relation object, but the schema also has a 'role' column
-        // We need to access the column value which is 'owner' | 'admin' | 'member'
+        // We need to access the column value which is 'owner' | 'member'
         const memberRole = (row as any).role;
         if (typeof memberRole === 'string' && memberRole === 'owner') {
           return "Owner";
@@ -164,7 +164,7 @@ export function MemberList({
       },
       header: t("role"),
       cell: ({ row }) => {
-        // The member.role column value is 'owner' | 'admin' | 'member'
+        // The member.role column value is 'owner' | 'member'
         // but there's also a 'role' relation to TRole
         const memberRole = (row.original as any).role;
         const isOwner = memberRole === 'owner';
@@ -280,7 +280,7 @@ export function MemberList({
           />
           {/* <ProtectedArea resource={'member'} action={'edit'}> */}
           {/* <AddMember roles={AllRoles} /> */}
-          {/* {!isDeveloper && ( */}
+          {/* {!platformStaff && ( */}
           <InviteMember userName={userName} roles={roles}>
             <Button>
               <Plus className="h-4 w-4" /> {t("invite")}

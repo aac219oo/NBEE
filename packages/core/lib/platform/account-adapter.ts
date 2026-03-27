@@ -9,15 +9,13 @@ import { getPlatformAccountAdapter } from "@heiso/core/lib/adapters";
 /**
  * Account Adapter - 帳號資料操作
  *
- * 讀取操作：
- *   - Core 模式：使用本地 accounts 表
- *   - CMS 模式：帳號基本資料從 foreignAccounts (FDW) 讀取
+ * 讀取操作：使用本地 accounts 表
  *
  * 寫入操作：
  *   - Core 模式：寫入本地 accounts 表
  *   - CMS 模式：若有 Platform Adapter，同時寫入 Platform DB 與本地 accounts 表
  *
- * 成員關係資料（role, status, inviteToken）：兩種模式皆使用本地 accounts 表
+ * 成員關係資料（role, status, inviteToken）：使用本地 accounts 表
  */
 
 const isCmsWithPlatform = () =>

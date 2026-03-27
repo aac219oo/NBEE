@@ -13,43 +13,22 @@ export { getAccountByEmailAdapter as getAccountByEmail };
 
 /**
  * Get all accounts
- * Core mode: From accounts table
- * CMS mode: From foreignAccounts (FDW)
  */
 export async function getUsers() {
   const db = await getDynamicDb();
 
-  if (process.env.APP_MODE === "core") {
-    // Core 模式：直接查詢 accounts 表
-    return await db.query.accounts.findMany({
-      columns: {
-        id: true,
-        name: true,
-        email: true,
-        avatar: true,
-        active: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  } else {
-    // APPS 模式：使用 FDW
-    // @ts-ignore - foreignAccounts Drizzle query type issue
-    const accounts = await db.query.foreignAccounts.findMany({
-      columns: {
-        id: true,
-        name: true,
-        email: true,
-        avatar: true,
-        active: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-    return accounts;
-  }
+  return await db.query.accounts.findMany({
+    columns: {
+      id: true,
+      name: true,
+      email: true,
+      avatar: true,
+      active: true,
+      lastLoginAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 }
 
 export async function getUserById(id: string) {

@@ -14,7 +14,7 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import type zod from "zod";
-import { foreignAccounts } from "../../foreign";
+import { accounts } from "../../auth/accounts";
 
 // Storage categories table
 export const fileStorageCategories = pgTable(
@@ -78,9 +78,9 @@ export const filesRelations = relations(files, ({ one, many }) => ({
     fields: [files.storageCategoryId],
     references: [fileStorageCategories.id],
   }),
-  owner: one(foreignAccounts, {
+  owner: one(accounts, {
     fields: [files.ownerId],
-    references: [foreignAccounts.id],
+    references: [accounts.id],
   }),
   tagRelations: many(fileTagRelations),
 }));

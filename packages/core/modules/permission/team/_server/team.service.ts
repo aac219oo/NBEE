@@ -2,7 +2,7 @@
 
 import { settings } from "@heiso/core/config/settings";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
-import { foreignAccounts, accounts } from "@heiso/core/lib/db/schema";
+import { accounts } from "@heiso/core/lib/db/schema";
 import { sendApprovedEmail, sendInviteUserEmail } from "@heiso/core/lib/email";
 import { generateInviteToken } from "@heiso/core/lib/id-generator";
 import { auth } from "@heiso/core/modules/auth/auth.config";
@@ -10,12 +10,9 @@ import { eq, and, isNull } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { MemberStatus, type Member } from "../types";
 
-const isCoreMode = () => process.env.APP_MODE === "core";
-
 /**
  * 取得團隊所有成員
- * Core 模式：使用 accounts 表
- * APPS 模式：使用 accounts 表 + FDW foreignAccounts（帳號基本資料）
+ * 使用 accounts 表
  */
 async function getTeamMembers(): Promise<Member[]> {
   const db = await getDynamicDb();
@@ -29,79 +26,28 @@ async function getTeamMembers(): Promise<Member[]> {
     orderBy: (t, { asc }) => [asc(t.createdAt)],
   });
 
-  if (isCoreMode()) {
-    // Core 模式：帳號資料已在 accounts 表
-    return accountList.map(account => ({
+  return accountList.map(account => ({
+    id: account.id,
+    accountId: account.id,
+    roleId: account.roleId,
+    role: account.role as any,
+    status: account.status as any,
+    inviteToken: account.inviteToken,
+    inviteExpiredAt: account.inviteExpiredAt,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+    deletedAt: account.deletedAt,
+    account: {
       id: account.id,
-      accountId: account.id,
-      roleId: account.roleId,
-      role: account.role as any,
-      status: account.status as any,
-      inviteToken: account.inviteToken,
-      inviteExpiredAt: account.inviteExpiredAt,
-      createdAt: account.createdAt,
-      updatedAt: account.updatedAt,
-      deletedAt: account.deletedAt,
-      account: {
-        id: account.id,
-        email: account.email,
-        name: account.name,
-        avatar: account.avatar,
-        active: account.active,
-        lastLoginAt: account.lastLoginAt,
-      } as any,
-      // @ts-ignore - customRole 與 role 名稱衝突
-      customRole: account.customRole ?? null,
-    })) as Member[];
-  } else {
-    // APPS 模式：從 foreignAccounts 取得帳號基本資料
-    const accountIds = accountList.map(a => a.id);
-    const foreignAccountsData = accountIds.length > 0
-      ? await db
-        .select()
-        .from(foreignAccounts)
-        .where(
-          accountIds.length === 1
-            ? eq(foreignAccounts.id, accountIds[0])
-            : eq(foreignAccounts.id, accountIds[0]) // TODO: use inArray when needed
-        )
-      : [];
-
-    const foreignAccountMap = new Map(foreignAccountsData.map(a => [a.id, a]));
-
-    return accountList.map(account => {
-      const foreignAccount = foreignAccountMap.get(account.id);
-      return {
-        id: account.id,
-        accountId: account.id,
-        roleId: account.roleId,
-        role: account.role as any,
-        status: account.status as any,
-        inviteToken: account.inviteToken,
-        inviteExpiredAt: account.inviteExpiredAt,
-        createdAt: account.createdAt,
-        updatedAt: account.updatedAt,
-        deletedAt: account.deletedAt,
-        account: foreignAccount ? {
-          id: foreignAccount.id,
-          email: foreignAccount.email,
-          name: foreignAccount.name,
-          avatar: foreignAccount.avatar,
-          active: foreignAccount.active,
-          lastLoginAt: foreignAccount.lastLoginAt,
-        } : {
-          id: account.id,
-          email: account.email,
-          name: account.name,
-          avatar: account.avatar,
-          active: account.active,
-          lastLoginAt: account.lastLoginAt,
-        },
-        // @ts-ignore - customRole 與 role 名稱衝突
-        customRole: account.customRole ?? null,
-      };
-    }) as Member[];
-  }
+      email: account.email,
+      name: account.name,
+      avatar: account.avatar,
+      active: account.active,
+      lastLoginAt: account.lastLoginAt,
+    } as any,
+    // @ts-ignore - customRole 與 role 名稱衝突
+    customRole: account.customRole ?? null,
+  })) as Member[];
 }
 
 /**
@@ -219,7 +165,7 @@ async function updateMember({
 }: {
   id: string;
   data: {
-    role?: 'owner' | 'admin' | 'member';
+    role?: 'owner' | 'member';
     roleId?: string | null;
     status?: 'invited' | 'active' | 'inactive' | 'suspended';
   };
@@ -465,11 +411,11 @@ async function transferOwnership({
       })
       .where(eq(accounts.id, newOwnerId));
 
-    // 移除前擁有者權限（降為 admin）
+    // 移除前擁有者權限（降為 member）
     await tx
       .update(accounts)
       .set({
-        role: 'admin',
+        role: 'member',
         roleId: null,
         updatedAt: new Date(),
       })

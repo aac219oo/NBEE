@@ -1,30 +1,40 @@
 import { verifyPassword } from "@heiso/core/lib/hash";
 import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { getAccountByEmail, getAccountWithPasswordByEmail, isUserDeveloper } from "./user.service";
+import { getAccountByEmail, getAccountWithPasswordByEmail } from "./user.service";
 
 declare module "next-auth" {
   interface Session {
     user: {
-      isDeveloper: boolean;
-      isAdminUser?: boolean;
+      platformStaff: boolean;
     } & DefaultSession["user"];
     member?: {
       status: string | null;
       isOwner: boolean;
-      roleName: string | null;
+      role: string | null;
+      customRoleName: string | null;
       fullAccess: boolean;
     };
   }
   interface JWT {
-    isDeveloper?: boolean;
-    memberStatus?: string | null;
-    isAdminUser?: boolean;
+    platformStaff?: boolean;
+    member?: {
+      status: string | null;
+      role: string | null;
+      customRoleName: string | null;
+      fullAccess: boolean;
+    } | null;
+    memberUpdatedAt?: number | null;
   }
 
   interface User {
-    isDeveloper: boolean;
-    isAdminUser?: boolean;
+    platformStaff: boolean;
+    member?: {
+      status: string | null;
+      role: string | null;
+      customRoleName: string | null;
+      fullAccess: boolean;
+    } | null;
   }
 }
 
@@ -35,8 +45,15 @@ class InvalidLoginError extends CredentialsSignin {
 export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
+      // Invalidate legacy tokens (missing platformStaff field)
+      if (!user && token.platformStaff === undefined) {
+        return {};
+      }
+
       if (user) {
-        token.isDeveloper = user.isDeveloper;
+        token.platformStaff = (user as any).platformStaff ?? false;
+        token.member = (user as any).member ?? null;
+        token.memberUpdatedAt = Date.now();
       }
       return token;
     },
@@ -44,8 +61,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (token) {
         session.user = {
           ...session.user,
-          isDeveloper: token.isDeveloper as boolean,
+          platformStaff: (token.platformStaff as boolean) ?? false,
           id: token.sub!,
+        };
+      }
+
+      // Platform staff: grant full access without membership
+      if (token.platformStaff) {
+        session.member = {
+          status: 'active',
+          isOwner: false,
+          role: null,
+          customRoleName: null,
+          fullAccess: true,
+        };
+        return session;
+      }
+
+      // Read membership from token (no DB query)
+      const memberData = token.member as { status: string | null; role: string | null; customRoleName: string | null; fullAccess: boolean } | null | undefined;
+      if (memberData && 'status' in memberData) {
+        session.member = {
+          status: memberData.status,
+          isOwner: memberData.role === 'owner',
+          role: memberData.role,
+          customRoleName: memberData.customRoleName,
+          fullAccess: memberData.fullAccess,
+        };
+      } else {
+        session.member = {
+          status: null,
+          isOwner: false,
+          role: null,
+          customRoleName: null,
+          fullAccess: false,
         };
       }
 
@@ -68,12 +117,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!account || account.id !== credentials.userId) {
             throw new InvalidLoginError();
           }
-          const isDeveloper = await isUserDeveloper(account.id);
           return {
             id: account.id,
             name: account.name ?? "",
             email: account.email,
-            isDeveloper,
+            platformStaff: false,
+            member: {
+              status: (account as any).status ?? null,
+              role: (account as any).role ?? null,
+              customRoleName: null,
+              fullAccess: (account as any).role === 'owner',
+            },
           };
         }
 
@@ -96,12 +150,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new InvalidLoginError();
         }
 
-        const isDeveloper = await isUserDeveloper(account.id);
-        return { 
-          id: account.id, 
-          name: account.name ?? "", 
-          email: account.email, 
-          isDeveloper 
+        return {
+          id: account.id,
+          name: account.name ?? "",
+          email: account.email,
+          platformStaff: false,
+          member: {
+            status: (account as any).status ?? null,
+            role: (account as any).role ?? null,
+            customRoleName: null,
+            fullAccess: (account as any).role === 'owner',
+          },
         };
       },
     }),

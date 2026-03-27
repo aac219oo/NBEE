@@ -23,8 +23,7 @@ export interface MemberAccount {
  * 成員類型（整合帳號與角色資訊）
  *
  * 此類型用於團隊成員列表 UI
- * - Core 模式：資料來自 accounts 表
- * - APPS 模式：資料來自 accounts 表 + foreignAccounts (帳號基本資料)
+ * 資料來自 Tenant DB accounts 表
  */
 export interface Member {
   id: string;

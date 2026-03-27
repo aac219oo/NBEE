@@ -28,7 +28,7 @@ type Props = {
   roles: Role[];
   pending?: boolean;
   onClose: () => void;
-  onApprove: (roleId: string | null, role: 'owner' | 'admin' | 'member') => void;
+  onApprove: (roleId: string | null, role: 'owner' | 'member') => void;
   onReject: () => void;
 };
 
@@ -43,7 +43,7 @@ export const ConfirmReviewMember = ({
 }: Props) => {
   const t = useTranslations("dashboard.permission.message.review");
   const labelT = useTranslations("dashboard.permission.team.invite");
-  // The member.role here is the TRole relation, member.role (the column) has type 'owner' | 'admin' | 'member'
+  // The member.role here is the TRole relation, member.role (the column) has type 'owner' | 'member'
   const memberRole = member.role as unknown as { id: string } | null;
   const [selectedRoleId, setSelectedRoleId] = useState<string>(
     memberRole?.id || "",

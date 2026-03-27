@@ -5,7 +5,7 @@ import { Button } from "@heiso/core/components/ui/button";
 import { Input } from "@heiso/core/components/ui/input";
 import { Label } from "@heiso/core/components/ui/label";
 import { useRouter } from "next/navigation";
-import { sendDevOTP } from "./actions";
+import { sendDevOTP, verifyDevOTP } from "./actions";
 import Header from "../_components/header";
 import OTPLoginForm from "../_components/otpLoginForm";
 
@@ -89,6 +89,7 @@ export default function DevLoginPage() {
                         setError={setError}
                         handleLoginSuccess={handleLoginSuccess}
                         extraSignInParams={{ isDevLogin: "true" }}
+                        verifyFn={verifyDevOTP}
                     />
                 )}
             </div>
