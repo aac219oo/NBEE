@@ -128,7 +128,7 @@ export default async function Page({
     }
 
     // 開發人員直接進 Dashboard
-    if (session.user.isDeveloper) {
+    if (session.user.platformStaff) {
       redirect("/dashboard");
     }
 

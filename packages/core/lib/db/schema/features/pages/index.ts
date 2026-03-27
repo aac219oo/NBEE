@@ -16,7 +16,7 @@ import {
 } from "drizzle-zod";
 import type zod from "zod/v4";
 import { generateId } from "@heiso/core/lib/id-generator";
-import { foreignAccounts } from "../../foreign";
+import { accounts } from "../../auth/accounts";
 
 export const pageTemplates = pgTable(
   "page_templates",
@@ -127,9 +127,9 @@ export const pageCategoryRelations = pgTable(
 );
 
 export const postRelations = relations(posts, ({ one, many }) => ({
-  user: one(foreignAccounts, {
+  user: one(accounts, {
     fields: [posts.userId],
-    references: [foreignAccounts.id],
+    references: [accounts.id],
   }),
   categories: many(pageCategoryRelations),
 }));
@@ -151,18 +151,18 @@ export const postPageCategoryRelations = relations(
 export const pageCategoriesRelations = relations(
   pageCategories,
   ({ one, many }) => ({
-    user: one(foreignAccounts, {
+    user: one(accounts, {
       fields: [pageCategories.userId],
-      references: [foreignAccounts.id],
+      references: [accounts.id],
     }),
     posts: many(pageCategoryRelations),
   }),
 );
 
 export const tagRelations = relations(tags, ({ one, many }) => ({
-  user: one(foreignAccounts, {
+  user: one(accounts, {
     fields: [tags.userId],
-    references: [foreignAccounts.id],
+    references: [accounts.id],
   }),
   posts: many(posts),
 }));

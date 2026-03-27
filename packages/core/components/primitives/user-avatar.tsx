@@ -170,8 +170,8 @@ export function UserAvatar({
 
             if (item.type === "LogOut") {
               // DevLogin users should be redirected to /devlogin after logout
-              const isAdminUser = (session?.user as any)?.isAdminUser;
-              const logoutPath = isAdminUser ? "/devlogin" : "/login";
+              const isPlatformStaff = session?.user?.platformStaff;
+              const logoutPath = isPlatformStaff ? "/devlogin" : "/login";
 
               return (
                 <DropdownMenuItem

@@ -9,8 +9,6 @@ import {
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { foreignAccounts } from "../foreign/accounts";
-
 // API Keys table
 export const apiKeys = pgTable(
   "api_keys",

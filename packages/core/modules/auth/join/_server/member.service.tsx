@@ -5,8 +5,6 @@ import { accounts } from "@heiso/core/lib/db/schema";
 import { auth } from "@heiso/core/modules/auth/auth.config";
 import { and, eq, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { isUserDeveloper } from "@heiso/core/modules/auth/_server/user.service";
-
 /**
  * 取得當前帳號的成員資格
  * 統一使用 accounts 表
@@ -20,12 +18,10 @@ async function getMembership() {
     throw new Error("Unauthorized");
   }
 
-  // Check if user is developer (owner)
-  const isDeveloper = await isUserDeveloper(accountId);
+  const platformStaff = session.user.platformStaff ?? false;
 
-  // If user is developer, no need to query membership
-  if (isDeveloper) {
-    return { isDeveloper, membership: null };
+  if (platformStaff) {
+    return { platformStaff, membership: null };
   }
 
   const account = await db.query.accounts.findFirst({
@@ -47,7 +43,7 @@ async function getMembership() {
   });
 
   return {
-    isDeveloper,
+    platformStaff,
     membership: account
       ? { id: account.id, role: account.role, customRole: account.customRole }
       : null,

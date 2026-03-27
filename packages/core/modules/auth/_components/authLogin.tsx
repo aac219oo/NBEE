@@ -14,7 +14,7 @@ import config from "@heiso/core/config";
 import { SystemOauth } from "@heiso/core/modules/dev-center/system/settings/general/page";
 import { oAuthLogin } from "@heiso/core/server/services/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { capitalize } from "lodash";
+
 import { useTranslations } from "next-intl";
 import { useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -22,8 +22,6 @@ import { z } from "zod";
 import {
   getLoginMethod,
   getMemberStatus,
-  getUserLoginMethod,
-  isUserDeveloper,
   getAccountByEmail,
 } from "../_server/user.service";
 import Header from "./header";
@@ -97,23 +95,8 @@ const AuthLogin = ({
             return setError(t("error.userNotFound"));
           }
 
-          const isDeveloper = await isUserDeveloper(account.id);
-          const userAuth = await getUserLoginMethod(account.id);
-          const loginMethod = await getLoginMethod(account.id); // 登入方式
-          const memberStatus = await getMemberStatus(account.id); // 成員狀態
-
-          if (isDeveloper) {
-            const loginMethod = "both";
-            setLoginMethod(loginMethod);
-            handleAuthMethod(loginMethod, values.email);
-            return;
-          }
-
-          if (userAuth) {
-            return setError(
-              t("error.userAuth", { oAuth: capitalize(systemOauth) || "" }),
-            );
-          }
+          const loginMethod = await getLoginMethod(account.id);
+          const memberStatus = await getMemberStatus(account.id);
 
           if (loginMethod === LoginStepEnum.SSO) {
             return setError(t("error.onlySSOAllowed"));

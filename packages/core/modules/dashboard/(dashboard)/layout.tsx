@@ -50,7 +50,7 @@ async function OrgLayoutWrap({
   // }
 
   // // 若非開發者，且尚未加入（無 membership 或 status !== 'joined'），強制導向 Join 頁
-  // if (!membership.isDeveloper && (!membership?.id || membership?.status !== 'joined')) {
+  // if (!membership.platformStaff && (!membership?.id || membership?.status !== 'joined')) {
   //   const cookieStore = await cookies();
   //   const joinToken = cookieStore.get('join-token');
   //   if (joinToken) {
@@ -59,7 +59,7 @@ async function OrgLayoutWrap({
   //   redirect('/join');
   // }
   const hasFullAccess =
-    membership.isDeveloper === true ||
+    membership.platformStaff === true ||
     membership.role === 'owner' ||
     membership.customRole?.fullAccess === true;
 
@@ -128,7 +128,7 @@ async function OrgLayoutWrap({
     },
   ] satisfies UserAvatarMenuItem[];
 
-  if (membership.isDeveloper) {
+  if (membership.platformStaff) {
     userAvatarMenu[0].group?.push({
       id: "dev-center",
       text: t("developer"),

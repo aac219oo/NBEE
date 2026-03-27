@@ -1,5 +1,4 @@
-import { verifyPassword } from "@heiso/core/lib/hash";
-import NextAuth, { CredentialsSignin, type DefaultSession, type User } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
@@ -8,25 +7,35 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 declare module "next-auth" {
   interface Session {
     user: {
-      isDeveloper: boolean;
-      isAdminUser?: boolean;
+      platformStaff: boolean;
     } & DefaultSession["user"];
     member?: {
       status: string | null;
       isOwner: boolean;
-      roleName: string | null;
+      role: string | null;
+      customRoleName: string | null;
       fullAccess: boolean;
     };
   }
   interface JWT {
-    isDeveloper?: boolean;
-    memberStatus?: string | null;
-    isAdminUser?: boolean;
+    platformStaff?: boolean;
+    member?: {
+      status: string | null;
+      role: string | null;
+      customRoleName: string | null;
+      fullAccess: boolean;
+    } | null;
+    memberUpdatedAt?: number | null;
   }
 
   interface User {
-    isDeveloper: boolean;
-    isAdminUser?: boolean;
+    platformStaff: boolean;
+    member?: {
+      status: string | null;
+      role: string | null;
+      customRoleName: string | null;
+      fullAccess: boolean;
+    } | null;
   }
 }
 
@@ -36,7 +45,7 @@ class InvalidLoginError extends CredentialsSignin {
 
 export const ALLOWED_DEV_EMAILS = ["pm@heiso.io", "dev@heiso.io"];
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   pages: {
     signIn: "/login",
     error: "/login",
@@ -94,13 +103,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return true;
       }
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session: updateData }) {
+      // Invalidate legacy tokens (missing platformStaff field)
+      if (!user && token.platformStaff === undefined) {
+        return {};
+      }
+
+      // Handle session update trigger (from unstable_update)
+      if (trigger === "update" && updateData?.member) {
+        token.member = updateData.member;
+        token.memberUpdatedAt = Date.now();
+        return token;
+      }
+
       if (user) {
-        token.isDeveloper = (user as any).isDeveloper;
-        token.isAdminUser = (user as any).isAdminUser;
+        token.platformStaff = (user as any).platformStaff ?? false;
         token.email = (user as any).email ?? (token as any).email;
 
-        // OAuth 登入：將 token.sub 替換為資料庫中的 account.id
+        // Write membership from User object (set during authorize)
+        token.member = (user as any).member ?? null;
+        token.memberUpdatedAt = Date.now();
+
+        // OAuth login: replace token.sub with Tenant DB account.id
         if (account && account.provider !== "credentials") {
           const email = (user.email || "").toString().trim();
           if (email) {
@@ -109,6 +133,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               const dbAccount = await getAccountByEmail(email);
               if (dbAccount) {
                 token.sub = dbAccount.id;
+                // Query membership for OAuth user
+                const { findMembershipByAccountId } = await import(
+                  "@heiso/core/modules/account/authentication/_server/auth.service"
+                );
+                const membership = await findMembershipByAccountId(dbAccount.id);
+                token.member = membership ? {
+                  status: membership.status,
+                  role: membership.role,
+                  customRoleName: membership.customRole ? (membership.customRole as any)[1] : null,
+                  fullAccess: membership.role === 'owner' || !!(membership.customRole && (membership.customRole as any)[2]),
+                } : { status: null, role: null, customRoleName: null, fullAccess: false };
+                token.memberUpdatedAt = Date.now();
               }
             } catch (e) {
               console.warn("[jwt] OAuth account lookup failed:", e);
@@ -117,66 +153,48 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
       }
 
-      // Admin User Strategy: Skip Core membership check
-      if (token.isAdminUser) {
-        return token;
-      }
-
-      // TODO: 統一登入功能尚未實作，暫時跳過 membership 查詢
-      // try {
-      //   const accountId = token.sub;
-      //   if (accountId) {
-      //     const { findMembershipByAccountId } = await import(
-      //       "@heiso/core/modules/account/authentication/_server/auth.service"
-      //     );
-      //     const membership = await findMembershipByAccountId(accountId);
-      //     (token as any).memberStatus = membership?.status ?? null;
-      //   }
-      // } catch (e) {
-      //   console.warn("[jwt] attach memberStatus failed:", e);
-      // }
       return token;
     },
     async session({ session, token }) {
       if (token) {
         session.user = {
           ...session.user,
-          isDeveloper: token.isDeveloper as boolean,
-          isAdminUser: token.isAdminUser as boolean,
+          platformStaff: (token.platformStaff as boolean) ?? false,
           id: token.sub!,
         };
       }
 
-      // Admin User Strategy: Grant All Permissions
-      if (token.isAdminUser) {
+      // Platform staff: grant full access without membership
+      if (token.platformStaff) {
         session.member = {
           status: 'active',
-          isOwner: true,
-          roleName: 'Admin',
+          isOwner: false,
+          role: null,
+          customRoleName: null,
           fullAccess: true,
         };
         return session;
       }
 
-      try {
-        const accountId = session.user?.id;
-        // console.log("[session] accountId:", accountId);
-        if (accountId) {
-          const { findMembershipByAccountId } = await import(
-            "@heiso/core/modules/account/authentication/_server/auth.service"
-          );
-          const membership = await findMembershipByAccountId(accountId);
-          // console.log("[session] membership:", membership);
-
-          session.member = {
-            status: membership?.status ?? null,
-            isOwner: membership?.role === 'owner',
-            roleName: membership?.role ?? null,
-            fullAccess: membership?.role === 'owner' || membership?.role === 'admin',
-          };
-        }
-      } catch (e) {
-        console.warn("[session] attach member failed:", e);
+      // Read membership from token (no DB query)
+      const memberData = token.member as { status: string | null; role: string | null; customRoleName: string | null; fullAccess: boolean } | null | undefined;
+      if (memberData && 'status' in memberData) {
+        session.member = {
+          status: memberData.status,
+          isOwner: memberData.role === 'owner',
+          role: memberData.role,
+          customRoleName: memberData.customRoleName,
+          fullAccess: memberData.fullAccess,
+        };
+      } else {
+        // Legacy token fallback
+        session.member = {
+          status: null,
+          isOwner: false,
+          role: null,
+          customRoleName: null,
+          fullAccess: false,
+        };
       }
 
       return session;
@@ -197,20 +215,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   events: {
     async signIn({ user, account, profile }) {
-      // Admin User Logic (Skip in Core Mode)
-      if (process.env.APP_MODE !== "core" && account?.provider === "credentials" && (user as any).isAdminUser) {
-        try {
-          const { getAdminAuthAdapter } = await import("@heiso/core/lib/adapters");
-          const adminAuth = getAdminAuthAdapter();
-          if (adminAuth) {
-            await adminAuth.updateLastLogin(user.id!);
-          }
-        } catch (e) {
-          console.error("[Admin signIn] Failed to update lastLoginAt", e);
-        }
-        return;
-      }
-
       // OAuth Logic
       try {
         if (!account || account.provider === "credentials") return;
@@ -280,100 +284,96 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         isDevLogin: { label: "Is Dev Login" },
       },
       async authorize(credentials, _req) {
+        // DevLogin OTP path (platform staff)
+        // OTP already verified by verifyDevOTP, trust the result
         if (credentials?.otpVerified === "true") {
           const email = String(credentials?.email || "");
           const accountId = String(credentials?.userId || "");
           if (!email || !accountId) throw new InvalidLoginError();
 
+          const isDevLogin = credentials?.isDevLogin === "true";
+          const isAllowedDevEmail = ALLOWED_DEV_EMAILS.includes(email);
+
+          if (isDevLogin && isAllowedDevEmail) {
+            // Platform staff: account is in HIVE DB, not Tenant DB
+            return {
+              id: accountId,
+              name: email.split("@")[0],
+              email,
+              platformStaff: true,
+              member: null,
+            };
+          }
+
+          // Non-dev OTP login: verify account in Tenant DB
           const { getAccount } = await import("./_server/user.service");
           const account = await getAccount(accountId);
           if (!account || account.email !== email) throw new InvalidLoginError();
-
-          // DevLogin OTP: Grant admin permissions for allowed emails
-          const isDevLogin = credentials?.isDevLogin === "true";
-          const isAllowedDevEmail = ALLOWED_DEV_EMAILS.includes(email);
 
           return {
             id: account.id,
             name: account.name,
             email: account.email,
-            isDeveloper: (isDevLogin && isAllowedDevEmail),
-            isAdminUser: (isDevLogin && isAllowedDevEmail) ? true : undefined,
+            platformStaff: false,
+            member: {
+              status: (account as any).status ?? null,
+              role: (account as any).role ?? null,
+              customRoleName: null,
+              fullAccess: (account as any).role === 'owner',
+            },
           };
         }
 
+        // Standard login: Tenant DB only
         if (!credentials?.username || !credentials?.password) throw new InvalidLoginError();
-        const { username, password } = <{ username: string; password: string }>credentials;
+        const { username, password: pwd } = credentials as { username: string; password: string };
 
-        // 1. Try Account (根據 APP_MODE 使用 accounts 或 foreignAccounts)
         const {
           getAccountByEmail,
           verifyPassword: verifyAccountPassword,
         } = await import("@heiso/core/lib/platform/account-adapter");
 
-        let account = null;
-        try {
-          account = await getAccountByEmail(username);
-          if (account) {
-            const isPasswordValid = await verifyAccountPassword(username, password);
-            if (isPasswordValid) {
-              return {
-                id: account.id,
-                name: account.name,
-                email: account.email,
-                isDeveloper: false,
-                isAdminUser: false,
-              } as User;
-            }
-          }
-        } catch (e) {
-          // CMS 模式下會拋出錯誤，繼續嘗試其他方式
-          console.warn("[Credentials] Account adapter failed:", e);
-        }
+        const account = await getAccountByEmail(username);
+        if (!account) throw new InvalidLoginError();
 
-        // 2. Try Hive Admin User (Skip in Core Mode)
-        if (process.env.APP_MODE !== "core") {
+        const isPasswordValid = await verifyAccountPassword(username, pwd);
+        if (!isPasswordValid) throw new InvalidLoginError();
+
+        // Query membership info for JWT
+        const memberData = {
+          status: (account as any).status ?? null,
+          role: (account as any).role ?? null,
+          customRoleName: null as string | null,
+          fullAccess: (account as any).role === 'owner',
+        };
+
+        // Resolve customRole if roleId exists
+        if ((account as any).roleId) {
           try {
-            const { getAdminAuthAdapter } = await import("@heiso/core/lib/adapters");
-            const adminAuth = getAdminAuthAdapter();
-            if (adminAuth) {
-              const adminUser = await adminAuth.getAdminUser(username);
-              if (adminUser) {
-                const isMatch = await verifyPassword(password, adminUser.password);
-                if (isMatch) {
-                  return {
-                    id: adminUser.id,
-                    name: adminUser.name,
-                    email: adminUser.email,
-                    isDeveloper: true,
-                    isAdminUser: true,
-                  } as User;
-                }
-              }
+            const { getDynamicDb } = await import("@heiso/core/lib/db/dynamic");
+            const db = await getDynamicDb();
+            const { roles } = await import("@heiso/core/lib/db/schema");
+            const { eq } = await import("drizzle-orm");
+            const customRole = await db.query.roles.findFirst({
+              where: eq(roles.id, (account as any).roleId),
+              columns: { name: true, fullAccess: true },
+            });
+            if (customRole) {
+              memberData.customRoleName = customRole.name;
+              memberData.fullAccess = memberData.fullAccess || customRole.fullAccess;
             }
           } catch (e) {
-            console.error("Hive Login Check Failed", e);
+            console.warn("[authorize] customRole lookup failed:", e);
           }
         }
 
-        // 3. Dev Login bypass for allowed emails
-        const isRefDevLogin = (credentials as any)?.isDevLogin === "true";
-        const isCoreAdminBypass =
-          process.env.APP_MODE === "core" &&
-          ALLOWED_DEV_EMAILS.includes(username) &&
-          isRefDevLogin;
-
-        if (isCoreAdminBypass && account) {
-          return {
-            id: account.id,
-            name: account.name ?? username,
-            email: account.email ?? username,
-            isDeveloper: true,
-            isAdminUser: true,
-          };
-        }
-
-        throw new InvalidLoginError();
+        return {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          platformStaff: false,
+          member: memberData,
+        };
       },
     }),
   ],

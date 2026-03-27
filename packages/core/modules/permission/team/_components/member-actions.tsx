@@ -49,7 +49,7 @@ export function MemberActions({
 }) {
   const t = useTranslations("dashboard.permission.message");
   const { data: session } = useSession();
-  const { isDeveloper } = useAccount();
+  const { platformStaff } = useAccount();
   const { settings } = useSettings();
   const [isRemovePending, startRemoveTransition] = useTransition();
   const [isResendPending, startResendTransition] = useTransition();
@@ -92,7 +92,7 @@ export function MemberActions({
       key: "edit" as const,
       label: t("edit.title"),
       Icon: Edit2,
-      visible: !isDeveloper && isUserActive,
+      visible: !platformStaff && isUserActive,
       onClick: () => setOpenEditConfirm(true),
     },
     {
@@ -132,7 +132,7 @@ export function MemberActions({
       label: t("transfer.title"),
       Icon: Crown,
       visible:
-        !isDeveloper && isCurrentUserOwner && canTransferTo && isUserActive,
+        !platformStaff && isCurrentUserOwner && canTransferTo && isUserActive,
       onClick: () => setOpenTransferConfirm(true),
     },
     {
@@ -141,7 +141,7 @@ export function MemberActions({
       label: t("resetPassword.action"),
       Icon: RotateCcwKey,
       visible:
-        !isDeveloper &&
+        !platformStaff &&
         isCurrentUserOwner &&
         member.status === MemberStatus.Active &&
         isUserActive,
@@ -152,7 +152,7 @@ export function MemberActions({
       key: "remove" as const,
       label: t("remove.action"),
       Icon: Trash2,
-      visible: !isDeveloper && isCurrentUserOwner,
+      visible: !platformStaff && isCurrentUserOwner,
       onClick: () => setOpenRemoveConfirm(true),
     },
     // {
@@ -180,7 +180,7 @@ export function MemberActions({
     });
   };
 
-  const handleApproveReview = (roleId: string | null, role: 'owner' | 'admin' | 'member') => {
+  const handleApproveReview = (roleId: string | null, role: 'owner' | 'member') => {
     startReviewTransition(async () => {
       try {
         await updateMember({

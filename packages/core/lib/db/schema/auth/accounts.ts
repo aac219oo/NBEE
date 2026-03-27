@@ -19,14 +19,10 @@ import { roles } from "../permissions/role";
 import { type Role, type MemberStatus } from "@heiso/core/types/member";
 
 /**
- * accounts 表 - 整合帳號與成員資料
+ * accounts 表 - 帳號與成員資料
  *
- * Core 模式：作為主要的使用者與成員資料來源（帳號 + 成員關係）
- * APPS 模式：
- *   - 帳號基本資料（email, name, avatar）：從 foreignAccounts (FDW) 讀取
- *   - 成員關係資料（role, status, inviteToken）：使用此表
- *
- * 此表合併了原本的 users 和 members 功能
+ * 每個 Tenant DB 獨立管理帳號資料。
+ * 初始 owner 帳號由 HIVE init 寫入。
  */
 export const accounts = pgTable(
   "accounts",
@@ -56,7 +52,7 @@ export const accounts = pgTable(
     mustChangePassword: boolean("must_change_password").default(false),
 
     // === 成員資格 ===
-    // 系統角色 (owner/admin/member)
+    // 系統角色 (owner/member)
     role: varchar("role", { length: 20 })
       .notNull()
       .default("member")
@@ -90,7 +86,7 @@ export const accounts = pgTable(
     index("accounts_status_idx").on(table.status),
     index("accounts_invite_token_idx").on(table.inviteToken),
     index("accounts_last_login_idx").on(table.lastLoginAt),
-    check("accounts_role_check", sql`${table.role} IN ('owner', 'admin', 'member')`),
+    check("accounts_role_check", sql`${table.role} IN ('owner', 'member')`),
     check("accounts_status_check", sql`${table.status} IN ('invited', 'active', 'inactive', 'suspended')`),
     check("accounts_login_method_check", sql`${table.loginMethod} IN ('both', 'otp', 'email', 'sso')`),
   ],

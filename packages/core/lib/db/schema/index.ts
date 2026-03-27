@@ -16,5 +16,3 @@ export * from "./system";
 // pages
 export * from "./features/pages";
 
-// foreign tables (FDW)
-export * from "./foreign";

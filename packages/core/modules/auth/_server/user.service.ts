@@ -2,10 +2,7 @@
 
 import { sendInvite } from "@heiso/core/modules/permission/team/_server/team.service";
 import { type Transaction } from "@heiso/core/lib/db";
-import {
-  foreignAccounts,
-  accounts,
-} from "@heiso/core/lib/db/schema";
+import { accounts } from "@heiso/core/lib/db/schema";
 import { generateInviteToken } from "@heiso/core/lib/id-generator";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDynamicDb } from "@heiso/core/lib/db/dynamic";
@@ -42,21 +39,14 @@ async function getPlatformAdapter() {
 
 /**
  * 取得所有帳號 (用於管理介面)
- * Core 模式：使用本地 accounts 表
- * APPS 模式：使用 FDW foreignAccounts
  */
 export async function getAccounts() {
   const db = await getDynamicDb();
 
-  if (isCoreMode()) {
-    const result = await db.query.accounts.findMany({
-      where: (t, { isNull }) => isNull(t.deletedAt),
-    });
-    return result;
-  } else {
-    const result = await db.select().from(foreignAccounts);
-    return result;
-  }
+  const result = await db.query.accounts.findMany({
+    where: (t, { isNull }) => isNull(t.deletedAt),
+  });
+  return result;
 }
 
 /**
@@ -139,27 +129,16 @@ export async function getMemberInviteToken(accountId: string) {
 
 /**
  * 取得帳號資訊
- * Core 模式：使用本地 accounts 表
- * APPS 模式：使用 FDW foreignAccounts
  * @param accountId - Account ID
  */
 export async function getAccount(accountId: string) {
   const db = await getDynamicDb();
 
-  if (isCoreMode()) {
-    const account = await db.query.accounts.findFirst({
-      where: (t, { eq, isNull }) =>
-        and(eq(t.id, accountId), isNull(t.deletedAt)),
-    });
-    return account ?? null;
-  } else {
-    const [account] = await db
-      .select()
-      .from(foreignAccounts)
-      .where(eq(foreignAccounts.id, accountId))
-      .limit(1);
-    return account ?? null;
-  }
+  const account = await db.query.accounts.findFirst({
+    where: (t, { eq, isNull }) =>
+      and(eq(t.id, accountId), isNull(t.deletedAt)),
+  });
+  return account ?? null;
 }
 
 /**
@@ -409,25 +388,14 @@ export async function checkTenantHasOwner() {
 
 /**
  * 透過 email 取得帳號
- * Core 模式：使用本地 accounts 表
- * APPS 模式：使用 FDW foreignAccounts
  */
 export async function getAccountByEmail(email: string) {
   const db = await getDynamicDb();
 
-  if (isCoreMode()) {
-    // Core 模式：使用本地 accounts 表
-    const account = await db.query.accounts.findFirst({
-      where: (t, { eq }) => eq(t.email, email),
-    });
-    return account ?? null;
-  } else {
-    // APPS 模式：使用 FDW foreignAccounts
-    const account = await db.query.foreignAccounts.findFirst({
-      where: eq(foreignAccounts.email, email),
-    });
-    return account ?? null;
-  }
+  const account = await db.query.accounts.findFirst({
+    where: (t, { eq }) => eq(t.email, email),
+  });
+  return account ?? null;
 }
 
 /**
@@ -464,32 +432,3 @@ export async function getAccountWithPasswordByEmail(
   }
 }
 
-/**
- * 檢查是否為 Developer (Owner)
- * Core 模式：使用本地 accounts 表檢查 role === 'owner'
- * APPS 模式：委派給 hive 層的服務函式
- */
-export async function isUserDeveloper(accountId: string): Promise<boolean> {
-  if (isCoreMode()) {
-    // Core 模式：檢查本地 accounts 表的 role
-    const db = await getDynamicDb();
-    const account = await db.query.accounts.findFirst({
-      columns: { role: true },
-      where: (t, { eq, isNull }) =>
-        and(eq(t.id, accountId), isNull(t.deletedAt)),
-    });
-
-    return account?.role === "owner";
-  } else {
-    // APPS 模式：使用 Platform Adapter
-    const adapter = await getPlatformAdapter();
-    return adapter.checkIsPlatformDeveloper(accountId);
-  }
-}
-
-/**
- * 取得帳號本身的登入驗證方式 (例如是否為 OAuth)
- */
-export async function getUserLoginMethod(accountId: string) {
-  return null;
-}

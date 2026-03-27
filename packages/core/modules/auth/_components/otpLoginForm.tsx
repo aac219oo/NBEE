@@ -34,6 +34,8 @@ interface OTPLoginFormProps {
   handleLoginSuccess: () => void;
   /** Pass additional credentials to signIn (e.g., isDevLogin for admin access) */
   extraSignInParams?: Record<string, string>;
+  /** Custom verify function (e.g., verifyDevOTP for devlogin) */
+  verifyFn?: (email: string, code: string) => Promise<{ success: boolean; message?: string; userId?: string }>;
 }
 
 const codeBoxMaxWidth = 6;
@@ -45,6 +47,7 @@ export default function OTPLoginForm({
   setError,
   handleLoginSuccess,
   extraSignInParams,
+  verifyFn,
 }: OTPLoginFormProps) {
   const t = useTranslations("auth.otp");
   const [userEmail, setUserEmail] = useState(email || "");
@@ -106,7 +109,8 @@ export default function OTPLoginForm({
     setIsLoading(true);
 
     try {
-      const result = await verifyOTP(userEmail, values.code);
+      const verify = verifyFn ?? verifyOTP;
+      const result = await verify(userEmail, values.code);
 
       if (!result.success) {
         setError(t(`error.${result.message}`));
@@ -130,7 +134,7 @@ export default function OTPLoginForm({
           setError(t("error.login"));
         }
       } else {
-        setError(result.message);
+        setError(result.message ?? t("error.general"));
       }
     } catch (_err) {
       setError(t("error.general"));

@@ -12,13 +12,11 @@
  * - 'user': 一般使用者（僅用於 SSO 登入）
  */
 
-import type { TForeignAccount } from "@heiso/core/lib/db/schema";
-
 type Developer = {
   accountId: string;
   role: string;
   createdAt: Date;
-  user: TForeignAccount;
+  user: { id: string; email: string; name: string; avatar: string | null };
 };
 
 /**

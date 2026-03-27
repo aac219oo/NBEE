@@ -29,12 +29,12 @@ export default auth(async (req) => {
     return response;
   }
 
-  // 已登入：若會員狀態非 active，導向 /pending
-  if (!req.auth.user.isDeveloper) {
+  // Platform staff: skip all member checks
+  if (!req.auth.user.platformStaff) {
     const memberStatus = req.auth?.member?.status ?? null;
     const pathname = req.nextUrl.pathname;
 
-    if (memberStatus && memberStatus !== "active" && pathname !== "/pending") {
+    if (memberStatus !== "active" && pathname !== "/pending") {
       const pendingUrl = new URL("/pending", req.url);
       return NextResponse.redirect(pendingUrl);
     }

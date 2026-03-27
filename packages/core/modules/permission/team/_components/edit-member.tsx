@@ -38,7 +38,7 @@ import { MemberUser } from "./member-list";
 
 const updateMemberFormSchema = z.object({
   roleId: z.string(),
-  role: z.enum(['owner', 'admin', 'member']),
+  role: z.enum(['owner', 'member']),
   status: z.string(),
 });
 
@@ -65,7 +65,7 @@ export function EditMember({
 
   // member.role is the TRole relation, but TMember also has a role column
   // Use type assertion to access the underlying column value
-  const memberRoleValue = ((member as any).role as 'owner' | 'admin' | 'member' | null) || 'member';
+  const memberRoleValue = ((member as any).role as 'owner' | 'member' | null) || 'member';
 
   const form = useForm<UpdateMemberFormValues>({
     resolver: zodResolver(updateMemberFormSchema),
