@@ -1,26 +1,11 @@
 "use client";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@heiso/core/components/ui/table";
 import { useSite } from "@heiso/core/providers/site";
 import {
   type ColumnDef,
-  type ColumnPinningState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
   type OnChangeFn,
   type SortingState,
-  useReactTable,
 } from "@tanstack/react-table";
-import { cn } from "@udecode/cn";
 import { Edit2, Link2, Star, UserRound } from "lucide-react";
 import {
   Tooltip,
@@ -29,7 +14,7 @@ import {
 } from "@heiso/core/components/ui/tooltip";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
   PostStatus,
   PostStatusBadge,
@@ -37,6 +22,7 @@ import {
 import { readableDate } from "@heiso/core/lib/utils/format";
 import type { Menu } from "@heiso/core/types/system";
 import { PostActions } from "./post-actions";
+import { DataTable } from "@heiso/core/components/primitives/posts/data-table";
 
 export type PostRow = {
   id: string;
@@ -66,7 +52,7 @@ export function PostTable({
   translationItem,
   showVisualEditor,
   enableStickyColumns,
-  sorting: controlledSorting,
+  sorting,
   onSortingChange,
   manualSorting,
 }: {
@@ -80,27 +66,16 @@ export function PostTable({
   linkBase?: string;
   globalFilter?: string;
   translationItem?: string;
-  /** 是否顯示 Visual Editor 入口按鈕 */
   showVisualEditor?: boolean;
-  /** 是否啟用 title/actions 欄 sticky */
   enableStickyColumns?: boolean;
-  /** 受控排序狀態 */
   sorting?: SortingState;
-  /** 排序變更回調 */
   onSortingChange?: OnChangeFn<SortingState>;
-  /** 是否由外部處理排序（傳入的 posts 已排好序） */
   manualSorting?: boolean;
 }) {
   const { site } = useSite();
   const tPosts = useTranslations("components.posts");
   const label = useTranslations("components.posts.list.label");
   const itemLabel = translationItem || tPosts("item");
-  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
-  const sorting = controlledSorting ?? internalSorting;
-  const setSorting = onSortingChange ?? setInternalSorting;
-  const [columnPinning] = useState<ColumnPinningState>(
-    enableStickyColumns ? { left: ["title"], right: ["actions"] } : {},
-  );
 
   const frontendBase =
     site?.basic?.base_url ??
@@ -126,18 +101,6 @@ export function PostTable({
     [linkBase, frontendBase, previewSecret],
   );
 
-  const _computeStatus = useCallback((post: PostRow): PostStatus => {
-    if (post.status === PostStatus.Hidden) return PostStatus.Hidden;
-
-    const p = post.isPublished ? new Date(post.isPublished).getTime() : null;
-    const u = post.updated ? new Date(post.updated).getTime() : null;
-
-    if (p && u && u > p) return PostStatus.Editing;
-    if (p) return PostStatus.Published;
-    return PostStatus.Draft;
-  }, []);
-
-  // 全域搜尋：僅比對標題
   const globalFilterFn = useCallback(
     (row: any, _columnId: string, filterValue: unknown) => {
       const q = String(filterValue ?? "")
@@ -246,7 +209,6 @@ export function PostTable({
           const links = defaultBuildLink(post);
           return (
             <div className="w-full flex items-center justify-center gap-0.5">
-              {/* Edit icon 已移至 DropdownMenu */}
               {showVisualEditor && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -291,93 +253,17 @@ export function PostTable({
     ],
   );
 
-  const table = useReactTable({
-    data: posts,
-    columns,
-    state: {
-      sorting,
-      globalFilter: globalFilter ?? "",
-      columnPinning,
-    },
-    manualSorting,
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    globalFilterFn,
-  });
-
   return (
-    <Table className={cn("space-y-3 text-muted-foreground", className)}>
-      <TableHeader>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => {
-              const isSortable = header.column.getCanSort();
-              const sorted = header.column.getIsSorted(); // false | 'asc' | 'desc'
-              const isPinnedLeft = enableStickyColumns && header.column.getIsPinned() === "left";
-              const isPinnedRight = enableStickyColumns && header.column.getIsPinned() === "right";
-              return (
-                <TableHead
-                  key={header.id}
-                  isSortable={isSortable}
-                  sorted={sorted}
-                  handleSort={header.column.getToggleSortingHandler()}
-                  className={cn(
-                    "select-none",
-                    isPinnedLeft && "sticky left-0 z-20 bg-background shadow-[2px_0_4px_rgba(0,0,0,0.08)]",
-                    isPinnedRight && "sticky right-0 z-20 bg-background shadow-[-2px_0_4px_rgba(0,0,0,0.08)]",
-                  )}
-                  style={
-                    isPinnedLeft
-                      ? { left: header.column.getStart("left") }
-                      : isPinnedRight
-                        ? { right: header.column.getAfter("right") }
-                        : undefined
-                  }
-                  isCenter={header.column.id === "actions"}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
-                      header.column.columnDef.header,
-                      header.getContext(),
-                    )}
-                </TableHead>
-              );
-            })}
-          </TableRow>
-        ))}
-      </TableHeader>
-      <TableBody className="h-full">
-        {table.getRowModel().rows.map((row) => (
-          <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-            {row.getVisibleCells().map((cell) => {
-              const isPinnedLeft = enableStickyColumns && cell.column.getIsPinned() === "left";
-              const isPinnedRight = enableStickyColumns && cell.column.getIsPinned() === "right";
-              return (
-                <TableCell
-                  key={cell.id}
-                  className={cn(
-                    "min-w-24 max-w-56 truncate pr-2.5 last:pr-0",
-                    isPinnedLeft && "sticky left-0 z-10 bg-background shadow-[2px_0_4px_rgba(0,0,0,0.08)]",
-                    isPinnedRight && "sticky right-0 z-10 bg-background shadow-[-2px_0_4px_rgba(0,0,0,0.08)]",
-                  )}
-                  style={
-                    isPinnedLeft
-                      ? { left: cell.column.getStart("left") }
-                      : isPinnedRight
-                        ? { right: cell.column.getAfter("right") }
-                        : undefined
-                  }
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              );
-            })}
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <DataTable
+      className={className}
+      data={posts}
+      columns={columns}
+      enableStickyColumns={enableStickyColumns}
+      sorting={sorting}
+      onSortingChange={onSortingChange}
+      manualSorting={manualSorting}
+      globalFilter={globalFilter}
+      globalFilterFn={globalFilterFn}
+    />
   );
 }
