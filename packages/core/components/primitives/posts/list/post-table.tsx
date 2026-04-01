@@ -11,15 +11,17 @@ import {
 import { useSite } from "@heiso/core/providers/site";
 import {
   type ColumnDef,
+  type ColumnPinningState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
+  type OnChangeFn,
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
 import { cn } from "@udecode/cn";
-import { Edit2, Link2, UserRound } from "lucide-react";
+import { Edit2, Link2, Star, UserRound } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -48,6 +50,7 @@ export type PostRow = {
   menus: Menu[];
   type?: string;
   slug?: string;
+  sortOrder?: number;
 };
 
 export function PostTable({
@@ -56,29 +59,48 @@ export function PostTable({
   onDelete,
   onDuplicate,
   onToggleStatus,
+  onToggleHighlight,
   isPending,
   linkBase,
   globalFilter,
   translationItem,
   showVisualEditor,
+  enableStickyColumns,
+  sorting: controlledSorting,
+  onSortingChange,
+  manualSorting,
 }: {
   className?: string;
   posts: PostRow[];
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => Promise<{ error?: string } | undefined>;
   onToggleStatus: (id: string, status: "hidden" | "draft") => Promise<void>;
+  onToggleHighlight?: (id: string) => Promise<void>;
   isPending: boolean;
   linkBase?: string;
   globalFilter?: string;
   translationItem?: string;
   /** 是否顯示 Visual Editor 入口按鈕 */
   showVisualEditor?: boolean;
+  /** 是否啟用 title/actions 欄 sticky */
+  enableStickyColumns?: boolean;
+  /** 受控排序狀態 */
+  sorting?: SortingState;
+  /** 排序變更回調 */
+  onSortingChange?: OnChangeFn<SortingState>;
+  /** 是否由外部處理排序（傳入的 posts 已排好序） */
+  manualSorting?: boolean;
 }) {
   const { site } = useSite();
   const tPosts = useTranslations("components.posts");
   const label = useTranslations("components.posts.list.label");
   const itemLabel = translationItem || tPosts("item");
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
+  const sorting = controlledSorting ?? internalSorting;
+  const setSorting = onSortingChange ?? setInternalSorting;
+  const [columnPinning] = useState<ColumnPinningState>(
+    enableStickyColumns ? { left: ["title"], right: ["actions"] } : {},
+  );
 
   const frontendBase =
     site?.basic?.base_url ??
@@ -142,6 +164,9 @@ export function PostTable({
           const links = defaultBuildLink(post);
           return (
             <div className="flex items-center gap-2">
+              {post.sortOrder === 1 && (
+                <Star className="size-3.5 shrink-0 fill-yellow-400 text-yellow-400" />
+              )}
               <Link href={links.edit} className="truncate">
                 {post.title}
               </Link>
@@ -240,6 +265,7 @@ export function PostTable({
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}
                 onToggleStatus={onToggleStatus}
+                onToggleHighlight={onToggleHighlight}
                 isPending={isPending}
                 editLink={links.edit}
                 detailLink={links.detail ?? undefined}
@@ -271,10 +297,12 @@ export function PostTable({
     state: {
       sorting,
       globalFilter: globalFilter ?? "",
+      columnPinning,
     },
+    manualSorting,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     globalFilterFn,
   });
@@ -287,13 +315,26 @@ export function PostTable({
             {headerGroup.headers.map((header) => {
               const isSortable = header.column.getCanSort();
               const sorted = header.column.getIsSorted(); // false | 'asc' | 'desc'
+              const isPinnedLeft = enableStickyColumns && header.column.getIsPinned() === "left";
+              const isPinnedRight = enableStickyColumns && header.column.getIsPinned() === "right";
               return (
                 <TableHead
                   key={header.id}
                   isSortable={isSortable}
                   sorted={sorted}
                   handleSort={header.column.getToggleSortingHandler()}
-                  className="select-none"
+                  className={cn(
+                    "select-none",
+                    isPinnedLeft && "sticky left-0 z-20 bg-background shadow-[2px_0_4px_rgba(0,0,0,0.08)]",
+                    isPinnedRight && "sticky right-0 z-20 bg-background shadow-[-2px_0_4px_rgba(0,0,0,0.08)]",
+                  )}
+                  style={
+                    isPinnedLeft
+                      ? { left: header.column.getStart("left") }
+                      : isPinnedRight
+                        ? { right: header.column.getAfter("right") }
+                        : undefined
+                  }
                   isCenter={header.column.id === "actions"}
                 >
                   {header.isPlaceholder
@@ -311,14 +352,29 @@ export function PostTable({
       <TableBody className="h-full">
         {table.getRowModel().rows.map((row) => (
           <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-            {row.getVisibleCells().map((cell) => (
-              <TableCell
-                key={cell.id}
-                className="min-w-24 max-w-56 truncate pr-2.5 last:pr-0"
-              >
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </TableCell>
-            ))}
+            {row.getVisibleCells().map((cell) => {
+              const isPinnedLeft = enableStickyColumns && cell.column.getIsPinned() === "left";
+              const isPinnedRight = enableStickyColumns && cell.column.getIsPinned() === "right";
+              return (
+                <TableCell
+                  key={cell.id}
+                  className={cn(
+                    "min-w-24 max-w-56 truncate pr-2.5 last:pr-0",
+                    isPinnedLeft && "sticky left-0 z-10 bg-background shadow-[2px_0_4px_rgba(0,0,0,0.08)]",
+                    isPinnedRight && "sticky right-0 z-10 bg-background shadow-[-2px_0_4px_rgba(0,0,0,0.08)]",
+                  )}
+                  style={
+                    isPinnedLeft
+                      ? { left: cell.column.getStart("left") }
+                      : isPinnedRight
+                        ? { right: cell.column.getAfter("right") }
+                        : undefined
+                  }
+                >
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              );
+            })}
           </TableRow>
         ))}
       </TableBody>

@@ -8,7 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@heiso/core/components/ui/dropdown-menu";
-import { Copy, Edit2, ExternalLink, Eye, EyeOff, MoreHorizontal, Trash2 } from "lucide-react";
+import { cn } from "@udecode/cn";
+import { Copy, Edit2, ExternalLink, Eye, EyeOff, MoreHorizontal, Star, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -20,10 +21,12 @@ interface PostActionsProps {
     id: string;
     status: string;
     title: string;
+    sortOrder?: number;
   };
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => Promise<{ error?: string } | undefined>;
   onToggleStatus: (id: string, status: "hidden" | "draft") => Promise<void>;
+  onToggleHighlight?: (id: string) => Promise<void>;
   isPending: boolean;
   editLink: string;
   detailLink?: string;
@@ -36,6 +39,7 @@ export function PostActions({
   onDelete,
   onDuplicate,
   onToggleStatus,
+  onToggleHighlight,
   isPending: isGlobalPending,
   editLink,
   detailLink,
@@ -47,6 +51,7 @@ export function PostActions({
 
   const [isDuplicatePending, startDuplicateTransition] = useTransition();
   const [isTogglePending, startToggleTransition] = useTransition();
+  const [isHighlightPending, startHighlightTransition] = useTransition();
 
   const handleDuplicate = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -63,6 +68,18 @@ export function PostActions({
         }
       } catch (_error) {
         toast.error(t("copyFailed"), { id: toastId });
+      }
+    });
+  };
+
+  const handleToggleHighlight = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!onToggleHighlight) return;
+    startHighlightTransition(async () => {
+      try {
+        await onToggleHighlight(post.id);
+      } catch (_error) {
+        toast.error(t("updateFailed"));
       }
     });
   };
@@ -101,6 +118,18 @@ export function PostActions({
               {t("edit")}
             </a>
           </DropdownMenuItem>
+          {onToggleHighlight && (
+            <DropdownMenuItem
+              onClick={handleToggleHighlight}
+              disabled={isHighlightPending}
+              className="cursor-pointer"
+            >
+              <Star
+                className={cn("mr-0.5 h-4 w-4", post.sortOrder === 1 && "fill-yellow-400 text-yellow-400")}
+              />
+              {post.sortOrder === 1 ? t("unhighlight") : t("highlight")}
+            </DropdownMenuItem>
+          )}
           {detailLink && (
             <DropdownMenuItem asChild className="cursor-pointer">
               <a href={detailLink} target="_blank" rel="noopener noreferrer">
