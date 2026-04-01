@@ -163,6 +163,8 @@
       "duplicate": "Duplicate",
       "show": "Show",
       "hide": "Hide",
+      "highlight": "Highlight",
+      "unhighlight": "Remove Highlight",
       "confirm-remove": {
         "areYouSure": "Are you sure?",
         "actionCannotBeUndone": "This action cannot be undone.",
