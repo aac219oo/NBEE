@@ -52,6 +52,7 @@ export function PostTable({
   translationItem,
   showVisualEditor,
   enableStickyColumns,
+  buildFrontendLink,
   sorting,
   onSortingChange,
   manualSorting,
@@ -68,6 +69,7 @@ export function PostTable({
   translationItem?: string;
   showVisualEditor?: boolean;
   enableStickyColumns?: boolean;
+  buildFrontendLink?: (post: PostRow) => string | null;
   sorting?: SortingState;
   onSortingChange?: OnChangeFn<SortingState>;
   manualSorting?: boolean;
@@ -86,8 +88,9 @@ export function PostTable({
     (post: PostRow) => {
       const base = linkBase ?? "./post";
 
-      const detail =
-        frontendBase && previewSecret
+      const detail = buildFrontendLink
+        ? buildFrontendLink(post)
+        : frontendBase && previewSecret
           ? `${frontendBase.replace(/\/$/, "")}/api/preview?id=${post.id}&secret=${previewSecret}`
           : null;
 
@@ -98,7 +101,7 @@ export function PostTable({
         detail,
       };
     },
-    [linkBase, frontendBase, previewSecret],
+    [linkBase, frontendBase, previewSecret, buildFrontendLink],
   );
 
   const globalFilterFn = useCallback(
@@ -133,15 +136,20 @@ export function PostTable({
               <Link href={links.edit} className="truncate">
                 {post.title}
               </Link>
-              {post.isPublished && post.status !== PostStatus.Hidden && (
-                <Link
-                  href={`${site?.basic?.base_url?.endsWith('/') ? site.basic.base_url.slice(0, -1) : site?.basic?.base_url || ''}${post.type ? `/${post.type}` : ''}${post.slug?.startsWith('/') ? post.slug : `/${post.slug || `pages/${post.id}`}`}`}
-                  className="text-gray-500 ml-1"
-                  target="_blank"
-                >
-                  <Link2 className="size-3.5 " />
-                </Link>
-              )}
+              {post.isPublished && post.status !== PostStatus.Hidden && (() => {
+                const frontendLink = buildFrontendLink
+                  ? buildFrontendLink(post)
+                  : `${site?.basic?.base_url?.endsWith('/') ? site.basic.base_url.slice(0, -1) : site?.basic?.base_url || ''}${post.type ? `/${post.type}` : ''}${post.slug?.startsWith('/') ? post.slug : `/${post.slug || `pages/${post.id}`}`}`;
+                return frontendLink ? (
+                  <Link
+                    href={frontendLink}
+                    className="text-gray-500 ml-1"
+                    target="_blank"
+                  >
+                    <Link2 className="size-3.5 " />
+                  </Link>
+                ) : null;
+              })()}
             </div>
           );
         },

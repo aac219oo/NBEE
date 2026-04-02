@@ -398,7 +398,7 @@ export function PostEdit({
       excerpt: data?.excerpt || "",
       featuredImage: data?.featuredImage || "",
       featuredVideo: data?.featuredVideo || "",
-      seoImage: (data as any)?.seoImage || "",
+      seoImage: data?.seoImage || "",
       categoryId:
         ui.info.categoriesMode !== false
           ? categories
@@ -408,11 +408,11 @@ export function PostEdit({
       published: !!data?.isPublished || false,
       menus: data?.menus || [],
       savedTemplateId: data?.savedTemplateId || "",
-      seoTitle: "",
+      seoTitle: (data as any)?.seoTitle || "",
       seoSlug: "",
-      seoDescription: "",
-      seoKeywords: "",
-      canonicalUrl: "",
+      seoDescription: (data as any)?.seoDescription || "",
+      seoKeywords: (data as any)?.seoKeywords || "",
+      canonicalUrl: (data as any)?.canonicalUrl || "",
       jsonId: "",
       twitterCard: "card",
     },
@@ -556,6 +556,11 @@ export function PostEdit({
       excerpt: input.excerpt || "",
       featuredImage: input.featuredImage || "",
       featuredVideo: input.featuredVideo || "",
+      seoTitle: input.seoTitle || "",
+      seoDescription: input.seoDescription || "",
+      seoImage: input.seoImage || "",
+      seoKeywords: input.seoKeywords || "",
+      canonicalUrl: input.canonicalUrl || "",
       categoryIds:
         ui.info.categoriesMode !== false
           ? (input.categoryId ?? []).map((item) => item.value)
@@ -1461,7 +1466,6 @@ export function PostEdit({
                                 field.onChange(e);
                               }}
                               placeholder={t("enterSeoTitle")}
-                              disabled
                             />
                           </FormControl>
                           <FormMessage />
@@ -1480,7 +1484,6 @@ export function PostEdit({
                             <Textarea
                               {...field}
                               placeholder={t("enterSeoDescription")}
-                              disabled
                             />
                           </FormControl>
                           <FormMessage />
@@ -1503,7 +1506,42 @@ export function PostEdit({
                                 <ImagePlus className="size-5 text-muted-foreground" />
                               }
                               buttonClassName="w-[200px] h-[112px]"
-                              disabled
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="seoKeywords"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className={formInfoItemClassName}>
+                          <FormLabel>{t("seoKeywords")}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder={t("enterSeoKeywords")}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="canonicalUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className={formInfoItemClassName}>
+                          <FormLabel>{t("canonicalUrl")}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder={t("enterCanonicalUrl")}
                             />
                           </FormControl>
                           <FormMessage />
