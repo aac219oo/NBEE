@@ -7,7 +7,7 @@ export const PagesConfig: SavePostConfig = {
   tabs: {
     edit: true,
     info: true,
-    seo: false,
+    seo: true,
     jsonId: false,
   },
   info: {
