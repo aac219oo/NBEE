@@ -96,7 +96,7 @@ export interface PostEditData {
   }[];
   isPublished: Date | null | boolean;
   savedTemplateId?: string | null;
-  seoImage?: string;
+  seoImage?: string | null;
   menus?: PostEditMenu[];
   [key: string]: any;
 }
