@@ -73,8 +73,6 @@ async function OrgLayoutWrap({
     roleId: membership?.roleId,
   });
 
-  // console.log("allowedMenuIds: ", allowedMenuIds);
-
   // Build navigation from static config, filtered by allowed IDs
   // Pass translation function for i18n support and optional custom menus
   const navigation = buildDashboardNavigation(
