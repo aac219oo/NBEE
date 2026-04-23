@@ -8,7 +8,38 @@ export type PermissionConfigShape = {
   readonly menu: { readonly id: string; readonly title: string; readonly path?: string | null } | null;
 };
 
-export const permissionsConfig = [] as const satisfies readonly PermissionConfigShape[];
+export const permissionsConfig = [
+  {
+    "id": "pe_tBI88yvgLm",
+    "resource": "article",
+    "action": "download",
+    "menu": {
+      "id": "xloztdCw76",
+      "title": "Article",
+      "path": "/article/post"
+    }
+  },
+  {
+    "id": "pe_UqlEYkrke1",
+    "resource": "report",
+    "action": "download",
+    "menu": {
+      "id": "ch5jNymL2t",
+      "title": "Overview",
+      "path": ""
+    }
+  },
+  {
+    "id": "pe_GO5dZCbCY1",
+    "resource": "Action",
+    "action": "download",
+    "menu": {
+      "id": "tUkCKz1yfd",
+      "title": "Navigation",
+      "path": "/navigation"
+    }
+  }
+] as const satisfies readonly PermissionConfigShape[];
 
 export type PermissionResource = (typeof permissionsConfig)[number]['resource'];
 export type PermissionAction = (typeof permissionsConfig)[number]['action'];
