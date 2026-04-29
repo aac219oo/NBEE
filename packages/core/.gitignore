@@ -1,0 +1,3 @@
+# Build-time generated config (from DB)
+config/generated/*
+!config/generated/.gitkeep

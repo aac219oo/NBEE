@@ -1,42 +1,36 @@
 import type { Navigation } from "@heiso/core/types/client";
-import { DASHBOARD_DEFAULT_MENUS } from "@heiso/core/config/menus";
-
-export type DashboardMenuKey = keyof typeof DASHBOARD_DEFAULT_MENUS;
+import { generatedMenus, type GeneratedMenu } from "@heiso/core/config/generated/menus";
 
 /**
- * Transforms static menu config into Navigation structure.
+ * Transforms generated menu config into Navigation structure.
  * Groups items by their 'group' property and filters by allowed menu IDs.
  *
- * @param allowedMenuIds - Array of menu keys the user has permission to access.
+ * @param allowedMenuIds - Array of menu names the user has permission to access.
  *                         If null/undefined, all menus are allowed (fullAccess).
  * @param translateFn - Optional function to translate menu titles.
- * @param menus - Optional custom menu configuration. Defaults to DASHBOARD_DEFAULT_MENUS.
+ * @param menus - Optional custom menu list. Defaults to generatedMenus.
  */
 export function buildDashboardNavigation(
   allowedMenuIds: string[] | null,
   translateFn?: (key: string) => string,
-  menus: typeof DASHBOARD_DEFAULT_MENUS = DASHBOARD_DEFAULT_MENUS
+  menus: readonly GeneratedMenu[] = generatedMenus
 ): Navigation {
-  const menuEntries = Object.entries(menus);
-
   // Filter by allowed IDs if not fullAccess
   const filteredMenus = allowedMenuIds
-    ? menuEntries.filter(([key]) => allowedMenuIds.includes(key))
-    : menuEntries;
+    ? menus.filter((menu) => allowedMenuIds.includes(menu.name))
+    : [...menus];
 
   // Group by 'group' property
-  const groupedMenus: Record<string, typeof filteredMenus> = {};
+  const groupedMenus: Record<string, GeneratedMenu[]> = {};
 
-  for (const entry of filteredMenus) {
-    const [, menu] = entry;
-    const groupName = menu.group;
-    if (!groupedMenus[groupName]) {
-      groupedMenus[groupName] = [];
+  for (const menu of filteredMenus) {
+    if (!groupedMenus[menu.group]) {
+      groupedMenus[menu.group] = [];
     }
-    groupedMenus[groupName].push(entry);
+    groupedMenus[menu.group].push(menu);
   }
 
-  // Sort each group by order and convert to NavItem format
+  // Sort each group by sortOrder and convert to NavItem format
   const items: Navigation["items"] = [];
 
   // Define group order
@@ -46,15 +40,15 @@ export function buildDashboardNavigation(
     const groupMenus = groupedMenus[groupName];
     if (!groupMenus || groupMenus.length === 0) continue;
 
-    // Sort by order
+    // Sort by sortOrder
     const sortedMenus = [...groupMenus].sort(
-      (a, b) => a[1].order - b[1].order
+      (a, b) => a.sortOrder - b.sortOrder
     );
 
     // Convert to NavItem array (grouped)
-    const navItems = sortedMenus.map(([key, menu]) => ({
-      id: key,
-      title: translateFn ? translateFn(menu.title) : menu.title,
+    const navItems = sortedMenus.map((menu) => ({
+      id: menu.name,
+      title: translateFn ? translateFn(menu.name) : menu.name,
       path: menu.path,
       icon: menu.icon,
     }));
