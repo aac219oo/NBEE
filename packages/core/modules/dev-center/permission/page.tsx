@@ -1,5 +1,5 @@
 import { CaptionTotal } from "@heiso/core/components/shared/caption-total";
-import { permissionsConfig, type PermissionConfigShape } from "@heiso/core/config/permissions";
+import { permissionsConfig, type PermissionConfigShape } from "@heiso/core/config/generated/permissions";
 import { Suspense } from "react";
 import { Skeleton } from "@heiso/core/components/ui/skeleton";
 import { getMenus } from "@heiso/core/modules/dev-center/permission/_server/menu.service";

@@ -1,6 +1,6 @@
 "use server";
 
-import { permissionsConfig, type PermissionConfigShape } from "@heiso/core/config/permissions";
+import { permissionsConfig, type PermissionConfigShape } from "@heiso/core/config/generated/permissions";
 import { db } from "@heiso/core/lib/db";
 import {
   permissions,

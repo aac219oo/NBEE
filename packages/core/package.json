@@ -21,10 +21,12 @@
     "./i18n/*": "./i18n/*.ts",
     "./emails/*": "./emails/*.tsx",
     "./providers/*": "./providers/*.tsx",
+    "./config/*": "./config/*.ts",
+    "./config/generated/*": "./config/generated/*.ts",
     "./globals.css": "./app/globals.css"
   },
   "scripts": {
-    "dev": "bun run:permission && bun x next dev --turbo",
+    "dev": "bun x next dev --turbo",
     "build": "bun x next build",
     "start": "bun x next start",
     "db:generate": "bun x drizzle-kit generate",
@@ -32,6 +34,7 @@
     "db:studio": "bun x drizzle-kit studio",
     "db:migrate": "bun x drizzle-kit migrate",
     "run:permission": "bun scripts/fetchPermissionFromDb.ts",
+    "run:menu": "bun scripts/fetchMenuFromDb.ts",
     "email:dev": "bun email dev",
     "lint": "biome check",
     "format": "biome format --write"

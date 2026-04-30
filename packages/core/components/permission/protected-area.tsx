@@ -1,5 +1,5 @@
 // import { Fragment } from 'react';
-import type { permissionsConfig } from "@heiso/core/config/permissions";
+import type { permissionsConfig } from "@heiso/core/config/generated/permissions";
 import { usePermission } from "@heiso/core/hooks/use-permission";
 
 export const ProtectedArea = ({

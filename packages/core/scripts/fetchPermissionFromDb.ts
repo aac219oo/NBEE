@@ -63,7 +63,7 @@ async function writePermissionsToConfig() {
       }));
 
     const content = buildPermissionsConfigContent(list);
-    const targetPath = path.resolve(process.cwd(), "config", "permissions.ts");
+    const targetPath = path.resolve(process.cwd(), "config", "generated", "permissions.ts");
     await fs.writeFile(targetPath, content, "utf8");
     console.log(`Permissions config written to: ${targetPath}`);
   } catch (err) {

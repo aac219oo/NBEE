@@ -7,14 +7,12 @@ import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { getMyMembership, getMyAllowedMenuIds } from "./_server/membership.service";
 import { buildDashboardNavigation } from "./dashboard-config";
-import { DASHBOARD_DEFAULT_MENUS } from "@heiso/core/config/menus";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
-  menus?: typeof DASHBOARD_DEFAULT_MENUS;
 }
 
-export default async function OrgLayout({ children, menus }: OrgLayoutProps) {
+export default async function OrgLayout({ children }: OrgLayoutProps) {
   // Authentication check
   const session = await auth();
   if (!session?.user) return null;
@@ -22,42 +20,19 @@ export default async function OrgLayout({ children, menus }: OrgLayoutProps) {
   // Get organization data
   return (
     <Suspense fallback={<LayoutSkeleton />}>
-      <OrgLayoutWrap menus={menus}>{children}</OrgLayoutWrap>
+      <OrgLayoutWrap>{children}</OrgLayoutWrap>
     </Suspense>
   );
 }
 
 async function OrgLayoutWrap({
   children,
-  menus
 }: {
   children: React.ReactNode;
-  menus?: typeof DASHBOARD_DEFAULT_MENUS;
 }) {
   // Get user membership and permissions
   const membership = await getMyMembership();
 
-  // Zombie Session Check: If no membership record found, force signout
-  // This handles cases where DB is reset but Browser Cookie remains.
-  // if (!membership.id) {
-  //   const { headers } = await import("next/headers");
-  //   const { redirect } = await import("next/navigation");
-  //   const h = await headers();
-  //   const host = h.get("x-forwarded-host") || h.get("host");
-  //   const proto = h.get("x-forwarded-proto") || "http";
-  //   const callbackUrl = `${proto}://${host}/login`;
-  //   redirect(`/api/auth/signout?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-  // }
-
-  // // 若非開發者，且尚未加入（無 membership 或 status !== 'joined'），強制導向 Join 頁
-  // if (!membership.platformStaff && (!membership?.id || membership?.status !== 'joined')) {
-  //   const cookieStore = await cookies();
-  //   const joinToken = cookieStore.get('join-token');
-  //   if (joinToken) {
-  //     redirect(`/join?token=${joinToken.value}`);
-  //   }
-  //   redirect('/join');
-  // }
   const hasFullAccess =
     membership.platformStaff === true ||
     membership.role === 'owner' ||
@@ -67,18 +42,16 @@ async function OrgLayoutWrap({
   const t = await getTranslations("dashboard.userMenu");
   const tn = await getTranslations("dashboard.nav");
 
-  // Build navigation menu from static config
+  // Build navigation menu from generated config
   const allowedMenuIds = await getMyAllowedMenuIds({
     fullAccess: hasFullAccess,
     roleId: membership?.roleId,
   });
 
-  // Build navigation from static config, filtered by allowed IDs
-  // Pass translation function for i18n support and optional custom menus
+  // Build navigation from generated config, filtered by allowed IDs
   const navigation = buildDashboardNavigation(
     allowedMenuIds,
     (key) => tn(key),
-    menus
   );
 
   const userAvatarMenu = [
@@ -86,12 +59,6 @@ async function OrgLayoutWrap({
       id: "user",
       type: "Group",
       group: [
-        // {
-        //   id: 'dashboard',
-        //   text: t('dashboard'),
-        //   href: '/dashboard',
-        //   type: 'Link',
-        // },
         {
           id: "accountSettings",
           text: t("accountSettings"),
@@ -100,25 +67,10 @@ async function OrgLayoutWrap({
         },
       ],
     },
-    // {
-    //   id: 'separator1',
-    //   type: 'Separator',
-    // },
-    // {
-    //   id: 'theme',
-    //   text: t('theme'),
-    //   type: 'Theme',
-    // },
     {
       id: "separator2",
       type: "Separator",
     },
-    // {
-    //   id: 'homePage',
-    //   text: t('homePage'),
-    //   href: '/',
-    //   type: 'Link',
-    // },
     {
       id: "logOut",
       text: t("logOut"),

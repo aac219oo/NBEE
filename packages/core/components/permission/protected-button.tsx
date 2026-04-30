@@ -1,5 +1,5 @@
 import { Button } from "@heiso/core/components/ui/button";
-import type { permissionsConfig } from "@heiso/core/config/permissions";
+import type { permissionsConfig } from "@heiso/core/config/generated/permissions";
 import { usePermission } from "@heiso/core/hooks/use-permission";
 
 type ProtectedButtonProps =
